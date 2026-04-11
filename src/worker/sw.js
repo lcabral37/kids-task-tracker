@@ -1,48 +1,60 @@
 "use strict";
-// src/worker/sw.ts
-// Service Worker implementation for offline functionality
-const CACHE_NAME = "v1";
-const urlsToCache = ["/", "/index.html", "/styles.css", "/script.js"];
+// Service Worker for Kids Task Tracker
+// Using plain JavaScript with minimal TypeScript to avoid worker context issues
+const CACHE_NAME = 'kids-task-tracker-v1';
+const ASSETS_TO_CACHE = [
+    '/',
+    '/index.html',
+];
 // Install event - cache the necessary resources
-self.addEventListener("install", (event) => {
+self.addEventListener('install', (event) => {
+    console.log('Service Worker installing...');
     event.waitUntil(caches.open(CACHE_NAME).then((cache) => {
-        console.log("Opened cache");
-        return cache.addAll(urlsToCache);
+        console.log('Cache opened');
+        return cache.addAll(ASSETS_TO_CACHE);
     }));
-});
-// Fetch event - return cached resources or fetch from network
-self.addEventListener("fetch", (event) => {
-    event.respondWith(caches.match(event.request).then((response) => {
-        // Cache hit - return the cached response
-        if (response) {
-            return response;
-        }
-        // Important: Clone the request
-        const requestClone = event.request.clone();
-        return fetch(requestClone).then((fetchResponse) => {
-            // Check if we received a valid response
-            if (!fetchResponse ||
-                fetchResponse.status !== 200 ||
-                fetchResponse.type !== "basic") {
-                return fetchResponse;
-            }
-            // Clone the response
-            const responseToCache = fetchResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-                cache.put(event.request, responseToCache);
-            });
-            return fetchResponse;
-        });
-    }));
+    self.skipWaiting();
 });
 // Activate event - clean up old caches
-self.addEventListener("activate", (event) => {
-    const cacheWhitelist = [CACHE_NAME];
+self.addEventListener('activate', (event) => {
+    console.log('Service Worker activating...');
     event.waitUntil(caches.keys().then((cacheNames) => {
         return Promise.all(cacheNames.map((cacheName) => {
-            if (cacheWhitelist.indexOf(cacheName) === -1) {
+            if (cacheName !== CACHE_NAME) {
+                console.log('Deleting old cache:', cacheName);
                 return caches.delete(cacheName);
             }
         }));
+    }));
+    self.clients.claim();
+});
+// Fetch event - network first, fallback to cache
+self.addEventListener('fetch', (event) => {
+    // Skip non-GET requests and cross-origin requests
+    if (event.request.method !== 'GET' || !event.request.url.includes(self.location.origin)) {
+        return;
+    }
+    event.respondWith(fetch(event.request)
+        .then((response) => {
+        // Don't cache non-200 responses or non-basic responses
+        if (!response || response.status !== 200 || response.type !== 'basic') {
+            return response;
+        }
+        // Clone the response
+        const responseToCache = response.clone();
+        // Cache successful responses
+        caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+        });
+        return response;
+    })
+        .catch(() => {
+        // Fallback to cache if network fails
+        return caches.match(event.request).then((cachedResponse) => {
+            return cachedResponse || new Response('Offline - resource not available', {
+                status: 503,
+                statusText: 'Service Unavailable',
+            });
+        });
     }));
 });

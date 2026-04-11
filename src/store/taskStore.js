@@ -1,12 +1,48 @@
-import create from "zustand";
-export const useTaskStore = create((set) => ({
+import create from 'zustand';
+import { persist } from 'zustand/middleware';
+export const useTaskStore = create()(persist((set, get) => ({
     children: [],
     tasks: [],
-    dailyEarnings: 0,
-    addChild: (name) => set((state) => ({ children: [...state.children, name] })),
-    addTask: (task) => set((state) => ({ tasks: [...state.tasks, task] })),
-    completeTask: (id) => set((state) => ({
-        tasks: state.tasks.map((task) => task.id === id ? { ...task, completed: true } : task),
+    activeChildId: null,
+    addChild: (child) => set((state) => ({
+        children: [...state.children, child],
+        activeChildId: state.activeChildId || child.id,
     })),
-    setDailyEarnings: (amount) => set({ dailyEarnings: amount }),
+    removeChild: (id) => set((state) => ({
+        children: state.children.filter((c) => c.id !== id),
+        activeChildId: state.activeChildId === id ? null : state.activeChildId,
+    })),
+    addTask: (task) => set((state) => ({
+        tasks: [...state.tasks, task],
+    })),
+    removeTask: (id) => set((state) => ({
+        tasks: state.tasks.filter((t) => t.id !== id),
+    })),
+    completeTask: (id) => set((state) => ({
+        tasks: state.tasks.map((task) => task.id === id
+            ? { ...task, completed: true, completedDate: new Date().toISOString().split('T')[0] }
+            : task),
+    })),
+    updateTask: (id, updates) => set((state) => ({
+        tasks: state.tasks.map((task) => task.id === id ? { ...task, ...updates } : task),
+    })),
+    setActiveChild: (id) => set({ activeChildId: id }),
+    getDailyEarnings: (date) => {
+        const state = get();
+        return state.tasks
+            .filter((t) => t.completed && t.completedDate === date)
+            .reduce((sum, t) => sum + t.amount, 0);
+    },
+    getTotalEarnings: () => {
+        const state = get();
+        return state.tasks
+            .filter((t) => t.completed)
+            .reduce((sum, t) => sum + t.amount, 0);
+    },
+    getTasksByChild: (childId) => {
+        const state = get();
+        return state.tasks.filter((t) => t.childId === childId);
+    },
+}), {
+    name: 'task-store',
 }));

@@ -4,15 +4,14 @@
  * @param {string} url - The URL of the service worker file.
  */
 export const registerServiceWorker = (url) => {
-    if ("serviceWorker" in navigator) {
-        window.addEventListener("load", () => {
-            navigator.serviceWorker
-                .register(url)
-                .then((registration) => {
-                console.log("Service Worker registered with scope:", registration.scope);
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register(url)
+                .then(registration => {
+                console.log('Service Worker registered with scope:', registration.scope);
             })
-                .catch((error) => {
-                console.error("Service Worker registration failed:", error);
+                .catch(error => {
+                console.error('Service Worker registration failed:', error);
             });
         });
     }
@@ -22,12 +21,12 @@ export const registerServiceWorker = (url) => {
  * @param {string} url - The URL of the service worker file.
  */
 export const unregisterServiceWorker = (url) => {
-    if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.getRegistrations().then((registrations) => {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
             for (let registration of registrations) {
                 if (registration.active?.scriptURL === url) {
-                    registration.unregister().then((result) => {
-                        console.log("Service Worker unregistered:", result);
+                    registration.unregister().then(result => {
+                        console.log('Service Worker unregistered:', result);
                     });
                 }
             }
