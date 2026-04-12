@@ -1,338 +1,189 @@
 import React, { useState } from "react";
-import { Plus, CheckCircle2, Circle, Trash2, Edit2, Save, X, Repeat2 } from "lucide-react";
+import { Plus, Minus, Trash2 } from "lucide-react";
 import { useTaskStore } from "../store/taskStore";
+import DateNavigator from "./DateNavigator";
+import TaskEditPanel from "./TaskEditPanel";
 
 const TasksView: React.FC = () => {
-  const {
-    activeChildId,
-    addTask,
-    toggleTask,
-    removeTask,
-    updateTask,
-    getTasksByChildAndType,
-  } = useTaskStore();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [amount, setAmount] = useState(1);
-  const [recurring, setRecurring] = useState<'none' | 'daily'>('none');
+  const { activeChildId, addTask, toggleTask, decrementTask, removeTask, updateTask, getTasksByChildAndType } =
+    useTaskStore();
+  
+  const today = new Date().toISOString().split("T")[0];
+  const [selectedDate, setSelectedDate] = useState(today);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editAmount, setEditAmount] = useState(1);
-  const [editRecurring, setEditRecurring] = useState<'none' | 'daily'>('none');
-
-  const handleAddTask = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!activeChildId) {
-      alert("Please select a child first");
-      return;
-    }
-
-    if (!title.trim()) {
-      alert("Please enter a task title");
-      return;
-    }
-
-    addTask({
-      id: Date.now().toString(),
-      title: title.trim(),
-      description: description.trim(),
-      amount: Math.max(0, amount),
-      completed: false,
-      childId: activeChildId,
-      date: new Date().toISOString().split("T")[0],
-      type: "earning",
-      recurring: recurring,
-    });
-
-    setTitle("");
-    setDescription("");
-    setAmount(1);
-    setRecurring('none');
-  };
-
-  const startEdit = (taskId: string, currentTitle: string, currentDescription: string | undefined, currentAmount: number, currentRecurring?: 'none' | 'daily') => {
-    setEditingId(taskId);
-    setEditTitle(currentTitle);
-    setEditDescription(currentDescription || "");
-    setEditAmount(currentAmount);
-    setEditRecurring(currentRecurring || 'none');
-  };
-
-  const saveEdit = (taskId: string) => {
-    if (!editTitle.trim()) {
-      alert("Please enter a task title");
-      return;
-    }
-
-    updateTask(taskId, {
-      title: editTitle.trim(),
-      description: editDescription.trim(),
-      amount: Math.max(0, editAmount),
-      recurring: editRecurring,
-    });
-
-    setEditingId(null);
-    setEditTitle("");
-    setEditDescription("");
-    setEditAmount(1);
-    setEditRecurring('none');
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditTitle("");
-    setEditDescription("");
-    setEditAmount(1);
-  };
+  const [isAddingNew, setIsAddingNew] = useState(false);
 
   if (!activeChildId) {
     return (
       <div className="bg-white rounded shadow p-6">
-        <p className="text-gray-500 text-center py-8">
-          Select a child to manage tasks
-        </p>
+        <p className="text-gray-500 text-center py-8">Select a child to manage tasks</p>
       </div>
     );
   }
 
-  const tasks = getTasksByChildAndType(activeChildId, "earning");
-  const completedCount = tasks.filter((t) => t.completed).length;
-  const totalEarned = tasks
-    .filter((t) => t.completed)
-    .reduce((sum, t) => sum + t.amount, 0);
+  const allTasks = getTasksByChildAndType(activeChildId, "earning");
+  const tasksForDisplay = allTasks.filter((t) => t.date === selectedDate);
+
+  const completedCount = tasksForDisplay.filter((t) => t.completionCount > 0).length;
+  const totalEarned = tasksForDisplay.reduce((sum, t) => sum + t.amount * t.completionCount, 0);
+  const totalCompletions = tasksForDisplay.reduce((sum, t) => sum + t.completionCount, 0);
+
+  const handleAddTask = (data: { title: string; description: string; amount: number; icon: string }) => {
+    // Create a template task (no templateId means it's a template)
+    // We use a special marker date to indicate this is a template
+    const templateId = Date.now().toString();
+    addTask({
+      id: templateId,
+      title: data.title,
+      description: data.description,
+      amount: Math.max(0, data.amount),
+      completionCount: 0,
+      childId: activeChildId,
+      date: "template", // Marker indicating this is a template
+      type: "earning",
+      icon: data.icon,
+    });
+    setIsAddingNew(false);
+  };
+
+  const handleEditTask = (taskId: string, data: { title: string; description: string; amount: number; icon: string }) => {
+    updateTask(taskId, {
+      title: data.title,
+      description: data.description,
+      amount: Math.max(0, data.amount),
+      icon: data.icon,
+    });
+    setEditingId(null);
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Add Task Form */}
-      <form onSubmit={handleAddTask} className="bg-white rounded shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">Add New Task</h2>
+    <div className="space-y-4">
+      <DateNavigator selectedDate={selectedDate} onDateChange={setSelectedDate} />
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Task Title *
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Clean bedroom, Do homework"
-              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-blue-50 rounded p-4 border border-blue-200">
+          <p className="text-sm text-gray-600">Tasks with Completions</p>
+          <p className="text-2xl font-bold text-blue-600">
+            {completedCount}/{tasksForDisplay.length}
+          </p>
+        </div>
+        <div className="bg-green-50 rounded p-4 border border-green-200">
+          <p className="text-sm text-gray-600">Total Earned</p>
+          <p className="text-2xl font-bold text-green-600">💰 {totalEarned}</p>
+        </div>
+      </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add details about the task (optional)"
-              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              rows={2}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Reward Amount 💰
-            </label>
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.valueAsNumber)}
-              placeholder="1"
-              min="0"
-              step="0.5"
-              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Recurrence 🔄
-            </label>
-            <select
-              value={recurring}
-              onChange={(e) => setRecurring(e.target.value as 'none' | 'daily')}
-              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="none">One-time only</option>
-              <option value="daily">Daily</option>
-            </select>
-          </div>
-
+      {/* Task List */}
+      <div className="bg-white rounded shadow p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Tasks for {new Date(selectedDate).toLocaleDateString()}</h2>
           <button
-            type="submit"
-            className="w-full flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded font-medium transition"
+            onClick={() => setIsAddingNew(true)}
+            className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded font-medium transition"
           >
             <Plus size={18} /> Add Task
           </button>
         </div>
-      </form>
 
-      {/* Task List */}
-      <div className="bg-white rounded shadow p-6">
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-2">Tasks</h2>
-          <div className="flex gap-4 text-sm">
-            <div className="bg-blue-50 px-3 py-2 rounded">
-              <span className="text-gray-600">Completed: </span>
-              <span className="font-bold text-blue-600">
-                {completedCount}/{tasks.length}
-              </span>
-            </div>
-            <div className="bg-green-50 px-3 py-2 rounded">
-              <span className="text-gray-600">Earned: </span>
-              <span className="font-bold text-green-600">💰 {totalEarned}</span>
-            </div>
-          </div>
-        </div>
-
-        {tasks.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">
-            No tasks yet. Create one to get started!
-          </p>
+        {tasksForDisplay.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">No tasks for this day. Add one to get started!</p>
         ) : (
           <div className="space-y-2">
-            {tasks.map((task) => (
+            {tasksForDisplay.map((task) => (
               <div
                 key={task.id}
-                className={`rounded border transition ${
-                  task.completed
-                    ? "bg-green-50 border-green-200"
-                    : "bg-gray-50 border-gray-200 hover:border-gray-300"
-                }`}
+                className="flex items-center gap-3 p-4 rounded border bg-gray-50 border-gray-200 hover:border-gray-300 transition"
               >
-                {editingId === task.id ? (
-                  // Edit mode
-                  <div className="p-4 space-y-3">
-                    <input
-                      type="text"
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                      className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Task title"
-                    />
-                    <textarea
-                      value={editDescription}
-                      onChange={(e) => setEditDescription(e.target.value)}
-                      className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                      rows={2}
-                      placeholder="Description (optional)"
-                    />
-                    <input
-                      type="number"
-                      value={editAmount}
-                      onChange={(e) => setEditAmount(e.target.valueAsNumber)}
-                      min="0"
-                      step="0.5"
-                      className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Reward amount"
-                    />
-                    <select
-                      value={editRecurring}
-                      onChange={(e) => setEditRecurring(e.target.value as 'none' | 'daily')}
-                      className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="none">One-time only</option>
-                      <option value="daily">Daily</option>
-                    </select>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => saveEdit(task.id)}
-                        className="flex-1 flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded font-medium"
-                      >
-                        <Save size={16} /> Save
-                      </button>
-                      <button
-                        onClick={cancelEdit}
-                        className="flex-1 flex items-center justify-center gap-2 bg-gray-300 hover:bg-gray-400 text-gray-800 px-3 py-2 rounded font-medium"
-                      >
-                        <X size={16} /> Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  // Display mode
-                  <div className="flex items-center gap-3 p-4">
-                    <button
-                      onClick={() => toggleTask(task.id)}
-                      className="flex-shrink-0 text-gray-400 hover:text-green-500 transition p-1"
-                      title={
-                        task.completed ? "Mark as incomplete" : "Mark as complete"
-                      }
-                    >
-                      {task.completed ? (
-                        <CheckCircle2 size={24} className="text-green-500" />
-                      ) : (
-                        <Circle size={24} />
-                      )}
-                    </button>
+                <span className="text-2xl">{task.icon || "⭐"}</span>
 
-                    <div className="flex-grow min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3
-                          className={`font-medium ${
-                            task.completed ? "line-through text-gray-500" : ""
-                          }`}
-                        >
-                          {task.title}
-                        </h3>
-                        {task.recurring === 'daily' && (
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded flex items-center gap-1 whitespace-nowrap">
-                            <Repeat2 size={12} /> Daily
-                          </span>
-                        )}
-                        {task.isRecurringInstance && (
-                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded whitespace-nowrap">
-                            Today
-                          </span>
-                        )}
-                      </div>
-                      {task.description && (
-                        <p className="text-sm text-gray-500">{task.description}</p>
-                      )}
-                    </div>
+                <div className="flex-grow min-w-0">
+                  <h3 className="font-medium">{task.title}</h3>
+                  {task.description && (
+                    <p className="text-sm text-gray-500">{task.description}</p>
+                  )}
+                </div>
 
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="font-semibold text-green-600 whitespace-nowrap">
-                        💰 {task.amount}
-                      </span>
-                      <button
-                        onClick={() =>
-                          startEdit(
-                            task.id,
-                            task.title,
-                            task.description,
-                            task.amount,
-                            task.recurring
-                          )
-                        }
-                        className="text-blue-500 hover:text-blue-700 p-1"
-                        title="Edit task"
-                      >
-                        <Edit2 size={18} />
-                      </button>
-                      <button
-                        onClick={() => removeTask(task.id)}
-                        className="text-red-500 hover:text-red-700 p-1"
-                        title="Delete task"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </div>
-                )}
+                {/* Counter Controls */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => decrementTask(task.id)}
+                    disabled={task.completionCount === 0}
+                    className="flex items-center justify-center w-8 h-8 rounded border border-gray-300 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed text-red-600 hover:text-red-700 transition"
+                    title="Decrease count"
+                  >
+                    <Minus size={18} />
+                  </button>
+                  <span className="font-bold text-lg w-8 text-center">{task.completionCount}</span>
+                  <button
+                    onClick={() => toggleTask(task.id)}
+                    className="flex items-center justify-center w-8 h-8 rounded border border-gray-300 hover:bg-green-50 text-green-600 hover:text-green-700 transition"
+                    title="Increase count"
+                  >
+                    <Plus size={18} />
+                  </button>
+                </div>
+
+                {/* Amount & Actions */}
+                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                  <span className="font-semibold text-green-600 whitespace-nowrap">
+                    💰 {task.amount}
+                  </span>
+                  <button
+                    onClick={() => setEditingId(task.id)}
+                    className="text-blue-500 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50 transition"
+                    title="Edit task"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => removeTask(task.id)}
+                    className="text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 transition"
+                    title="Delete task"
+                  >
+                    🗑️
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Edit Panel */}
+      {editingId && (
+        <TaskEditPanel
+          isOpen={true}
+          onClose={() => setEditingId(null)}
+          onSave={(data) => {
+            const task = tasksForDisplay.find((t) => t.id === editingId);
+            if (task) {
+              handleEditTask(editingId, data);
+            }
+          }}
+          initialData={
+            tasksForDisplay.find((t) => t.id === editingId)
+              ? {
+                  title: tasksForDisplay.find((t) => t.id === editingId)?.title || "",
+                  description: tasksForDisplay.find((t) => t.id === editingId)?.description || "",
+                  amount: tasksForDisplay.find((t) => t.id === editingId)?.amount || 1,
+                  icon: tasksForDisplay.find((t) => t.id === editingId)?.icon || "⭐",
+                }
+              : undefined
+          }
+          title="Edit Task"
+          type="earning"
+        />
+      )}
+
+      {/* Add Panel */}
+      <TaskEditPanel
+        isOpen={isAddingNew}
+        onClose={() => setIsAddingNew(false)}
+        onSave={handleAddTask}
+        title="Add New Task"
+        type="earning"
+      />
     </div>
   );
 };

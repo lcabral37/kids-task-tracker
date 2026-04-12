@@ -1,40 +1,40 @@
 import React, { useMemo, useState } from "react";
 import { useTaskStore } from "../store/taskStore";
-import { Plus, Minus } from "lucide-react";
+import { Plus, Minus, Trash2 } from "lucide-react";
+import BudgetChart from "./BudgetChart";
 
 const EarningsDashboardView: React.FC = () => {
-  const { tasks, getAvailableBalance, getSpentToday, setManualAdjustment, manualAdjustment } = useTaskStore();
+  const { tasks, getAvailableBalance, getSpentToday, setManualAdjustment, manualAdjustment, resetStore } = useTaskStore();
   const [adjustAmount, setAdjustAmount] = useState(0);
   const [showAdjustForm, setShowAdjustForm] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const stats = useMemo(() => {
     const totalEarned = tasks
-      .filter((t) => t.completed && t.type === "earning")
-      .reduce((sum, t) => sum + t.amount, 0);
+      .filter((t) => t.type === "earning")
+      .reduce((sum, t) => sum + t.amount * t.completionCount, 0);
 
     const totalSpent = tasks
-      .filter((t) => t.completed && t.type === "spending")
-      .reduce((sum, t) => sum + t.amount, 0);
+      .filter((t) => t.type === "spending")
+      .reduce((sum, t) => sum + t.amount * t.completionCount, 0);
 
     const today = new Date().toISOString().split("T")[0];
     const todayEarned = tasks
-      .filter(
-        (t) => t.completed && t.completedDate === today && t.type === "earning",
-      )
-      .reduce((sum, t) => sum + t.amount, 0);
+      .filter((t) => t.date === today && t.type === "earning")
+      .reduce((sum, t) => sum + t.amount * t.completionCount, 0);
 
     const todaySpent = getSpentToday(today);
 
     const dailyStats: Record<string, { earned: number; spent: number }> = {};
     tasks.forEach((task) => {
-      if (task.completed && task.completedDate) {
-        if (!dailyStats[task.completedDate]) {
-          dailyStats[task.completedDate] = { earned: 0, spent: 0 };
+      if (task.completionCount > 0 && task.date !== 'template') {
+        if (!dailyStats[task.date]) {
+          dailyStats[task.date] = { earned: 0, spent: 0 };
         }
         if (task.type === "earning") {
-          dailyStats[task.completedDate].earned += task.amount;
+          dailyStats[task.date].earned += task.amount * task.completionCount;
         } else {
-          dailyStats[task.completedDate].spent += task.amount;
+          dailyStats[task.date].spent += task.amount * task.completionCount;
         }
       }
     });
@@ -204,6 +204,43 @@ const EarningsDashboardView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Budget Chart */}
+      <BudgetChart />
+
+      {/* Reset Data Button */}
+      {showResetConfirm ? (
+        <div className="bg-red-50 rounded shadow p-6 border border-red-200">
+          <h3 className="text-lg font-semibold text-red-800 mb-3">Reset All Data?</h3>
+          <p className="text-red-700 mb-4">
+            This will delete all tasks, activities, and history. This action cannot be undone.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                resetStore();
+                setShowResetConfirm(false);
+              }}
+              className="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded font-medium transition"
+            >
+              Yes, Delete Everything
+            </button>
+            <button
+              onClick={() => setShowResetConfirm(false)}
+              className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded font-medium transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowResetConfirm(true)}
+          className="w-full bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 px-4 py-3 rounded font-medium transition flex items-center justify-center gap-2 border border-red-200"
+        >
+          <Trash2 size={18} /> Reset All Data
+        </button>
+      )}
     </div>
   );
 };

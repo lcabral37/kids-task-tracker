@@ -18,50 +18,9 @@ const App: React.FC = () => {
     // Register service worker for offline support
     registerServiceWorker("/sw.js");
 
-    // Refresh daily recurring tasks
+    // Refresh daily recurring tasks on each app load
     refreshDailyTasks();
-
-    // Load persisted data from Dexie on app start
-    const loadData = async () => {
-      try {
-        const children = await db.children.toArray();
-        const tasks = await db.tasks.toArray();
-
-        if (children.length > 0) {
-          children.forEach((child) => {
-            if (!storeChildren.find((c) => c.id === child.id?.toString())) {
-              addChild({
-                id: child.id?.toString() || "",
-                name: child.name,
-                age: child.age,
-              });
-            }
-          });
-        }
-
-        if (tasks.length > 0) {
-          tasks.forEach((task) => {
-            if (!storeTasks.find((t) => t.id === task.id?.toString())) {
-              addTask({
-                id: task.id?.toString() || "",
-                title: task.title,
-                description: task.description,
-                amount: 0,
-                completed: task.isCompleted,
-                childId: task.childId?.toString() || "",
-                date: new Date().toISOString().split("T")[0],
-                type: "earning",
-              });
-            }
-          });
-        }
-      } catch (error) {
-        console.error("Failed to load data from database:", error);
-      }
-    };
-
-    loadData();
-  }, []);
+  }, [refreshDailyTasks]);
 
   const renderView = () => {
     switch (activeView) {

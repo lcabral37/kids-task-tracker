@@ -37,39 +37,58 @@ self.addEventListener('activate', (event: any) => {
   (self as any).clients.claim();
 });
 
-// Fetch event - network first, fallback to cache
+// Fetch event - cache first for assets, network first for dynamic content
 self.addEventListener('fetch', (event: any) => {
   // Skip non-GET requests and cross-origin requests
   if (event.request.method !== 'GET' || !event.request.url.includes(self.location.origin)) {
     return;
   }
 
-  event.respondWith(
-    fetch(event.request)
-      .then((response: Response) => {
-        // Don't cache non-200 responses or non-basic responses
-        if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response;
+  const url = new URL(event.request.url);
+  
+  // Cache first strategy for static assets (long cache)
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || 
+      url.pathname.endsWith('.woff2') || url.pathname.endsWith('.svg') ||
+      url.pathname === '/') {
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse: Response | undefined) => {
+        if (cachedResponse) {
+          return cachedResponse;
         }
-
-        // Clone the response
-        const responseToCache = response.clone();
-
-        // Cache successful responses
-        caches.open(CACHE_NAME).then((cache: Cache) => {
-          cache.put(event.request, responseToCache);
-        });
-
-        return response;
-      })
-      .catch(() => {
-        // Fallback to cache if network fails
-        return caches.match(event.request).then((cachedResponse: Response | undefined) => {
-          return cachedResponse || new Response('Offline - resource not available', {
-            status: 503,
-            statusText: 'Service Unavailable',
+        return fetch(event.request).then((response: Response) => {
+          if (!response || response.status !== 200 || response.type !== 'basic') {
+            return response;
+          }
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache: Cache) => {
+            cache.put(event.request, responseToCache);
           });
+          return response;
         });
       })
-  );
+    );
+  } else {
+    // Network first for other requests
+    event.respondWith(
+      fetch(event.request)
+        .then((response: Response) => {
+          if (!response || response.status !== 200 || response.type !== 'basic') {
+            return response;
+          }
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache: Cache) => {
+            cache.put(event.request, responseToCache);
+          });
+          return response;
+        })
+        .catch(() => {
+          return caches.match(event.request).then((cachedResponse: Response | undefined) => {
+            return cachedResponse || new Response('Offline - resource not available', {
+              status: 503,
+              statusText: 'Service Unavailable',
+            });
+          });
+        })
+    );
+  }
 });

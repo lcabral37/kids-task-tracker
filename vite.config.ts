@@ -17,9 +17,12 @@ export default defineConfig({
       },
       output: {
         entryFileNames: (chunkInfo) => {
-          return chunkInfo.name === 'sw' ? '[name].js' : 'assets/[name]-[hash].js';
+          return chunkInfo.name === 'sw' ? '[name].js' : 'assets/[name].js';
         },
+        chunkFileNames: 'assets/[name].js',
+        manualChunks: undefined,
       },
     },
+    chunkSizeWarningLimit: Infinity,
   }
 });

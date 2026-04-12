@@ -1,18 +1,44 @@
 import create from 'zustand';
 import { persist } from 'zustand/middleware';
 
+const STORE_VERSION = 2;
+
+// Migration helper
+const migrateData = (data: any) => {
+    const version = data.version || 1;
+    
+    if (version < STORE_VERSION) {
+        console.log(`Migrating from v${version} to v${STORE_VERSION}`);
+        
+        if (version === 1) {
+            // v1 -> v2: Convert from boolean completed to numeric completionCount
+            if (data.tasks) {
+                data.tasks = data.tasks.map((task: any) => ({
+                    ...task,
+                    completionCount: task.completed ? 1 : 0,
+                    completed: undefined,
+                    completedDate: undefined,
+                }));
+            }
+        }
+        
+        data.version = STORE_VERSION;
+    }
+    
+    return data;
+};
+
 export interface Task {
     id: string;
     title: string;
     description?: string;
     amount: number;
-    completed: boolean;
+    completionCount: number;
     childId: string;
     date: string;
-    completedDate?: string;
     type: 'earning' | 'spending';
-    recurring?: 'daily' | 'none';
-    isRecurringInstance?: boolean;
+    icon?: string;
+    templateId?: string;
 }
 
 export interface Child {
@@ -26,11 +52,13 @@ interface TaskStore {
     tasks: Task[];
     activeChildId: string | null;
     manualAdjustment: number;
+    version: number;
     addChild: (child: Child) => void;
     removeChild: (id: string) => void;
     addTask: (task: Task) => void;
     completeTask: (id: string) => void;
     toggleTask: (id: string) => void;
+    decrementTask: (id: string) => void;
     removeTask: (id: string) => void;
     setActiveChild: (id: string) => void;
     getDailyEarnings: (date: string) => number;
@@ -43,6 +71,7 @@ interface TaskStore {
     refreshDailyTasks: () => void;
     setManualAdjustment: (amount: number) => void;
     adjustBalance: (delta: number) => void;
+    resetStore: () => void;
 }
 
 export const useTaskStore = create<TaskStore>()(
@@ -52,6 +81,7 @@ export const useTaskStore = create<TaskStore>()(
             tasks: [],
             activeChildId: null,
             manualAdjustment: 0,
+            version: STORE_VERSION,
 
             addChild: (child) =>
                 set((state) => ({
@@ -79,7 +109,7 @@ export const useTaskStore = create<TaskStore>()(
                 set((state) => ({
                     tasks: state.tasks.map((task) =>
                         task.id === id
-                            ? { ...task, completed: true, completedDate: new Date().toISOString().split('T')[0] }
+                            ? { ...task, completionCount: task.completionCount + 1 }
                             : task
                     ),
                 })),
@@ -90,8 +120,7 @@ export const useTaskStore = create<TaskStore>()(
                         task.id === id
                             ? {
                                 ...task,
-                                completed: !task.completed,
-                                completedDate: !task.completed ? new Date().toISOString().split('T')[0] : undefined,
+                                completionCount: task.completionCount + 1,
                             }
                             : task
                     ),
@@ -104,38 +133,47 @@ export const useTaskStore = create<TaskStore>()(
                     ),
                 })),
 
+            decrementTask: (id: string) =>
+                set((state) => ({
+                    tasks: state.tasks.map((task) =>
+                        task.id === id && task.completionCount > 0
+                            ? { ...task, completionCount: task.completionCount - 1 }
+                            : task
+                    ),
+                })),
+
             setActiveChild: (id) => set({ activeChildId: id }),
 
             getDailyEarnings: (date) => {
                 const state = get();
                 return state.tasks
-                    .filter((t) => t.completed && t.completedDate === date && t.type === 'earning')
-                    .reduce((sum, t) => sum + t.amount, 0);
+                    .filter((t) => t.date === date && t.type === 'earning')
+                    .reduce((sum, t) => sum + t.amount * t.completionCount, 0);
             },
 
             getTotalEarnings: () => {
                 const state = get();
                 return state.tasks
-                    .filter((t) => t.completed && t.type === 'earning')
-                    .reduce((sum, t) => sum + t.amount, 0);
+                    .filter((t) => t.type === 'earning' && t.date !== 'template')
+                    .reduce((sum, t) => sum + t.amount * t.completionCount, 0);
             },
 
             getSpentToday: (date) => {
                 const state = get();
                 return state.tasks
-                    .filter((t) => t.completed && t.completedDate === date && t.type === 'spending')
-                    .reduce((sum, t) => sum + t.amount, 0);
+                    .filter((t) => t.date === date && t.type === 'spending' && t.date !== 'template')
+                    .reduce((sum, t) => sum + t.amount * t.completionCount, 0);
             },
 
             getAvailableBalance: () => {
                 const state = get();
                 const earned = state.tasks
-                    .filter((t) => t.completed && t.type === 'earning')
-                    .reduce((sum, t) => sum + t.amount, 0);
+                    .filter((t) => t.type === 'earning' && t.date !== 'template')
+                    .reduce((sum, t) => sum + t.amount * t.completionCount, 0);
                 const spent = state.tasks
-                    .filter((t) => t.completed && t.type === 'spending')
-                    .reduce((sum, t) => sum + t.amount, 0);
-                return Math.max(0, earned - spent + state.manualAdjustment);
+                    .filter((t) => t.type === 'spending' && t.date !== 'template')
+                    .reduce((sum, t) => sum + t.amount * t.completionCount, 0);
+                return earned - spent + state.manualAdjustment;
             },
 
             getTasksByChild: (childId) => {
@@ -152,26 +190,23 @@ export const useTaskStore = create<TaskStore>()(
                 const today = new Date().toISOString().split('T')[0];
                 set((state) => {
                     const updatedTasks = [...state.tasks];
-                    const recurringTemplates = state.tasks.filter((t) => t.recurring === 'daily' && !t.isRecurringInstance);
+                    // Get all template tasks (those with date === "template")
+                    const templates = state.tasks.filter((t) => t.date === 'template');
 
-                    recurringTemplates.forEach((template) => {
+                    templates.forEach((template) => {
                         // Check if today's instance already exists
                         const todayInstance = updatedTasks.find(
-                            (t) =>
-                                t.id.startsWith(template.id + '_') &&
-                                t.date === today &&
-                                t.isRecurringInstance
+                            (t) => t.templateId === template.id && t.date === today
                         );
 
-                        // If no instance for today, create one
+                        // If no instance for today, create one with completionCount reset to 0
                         if (!todayInstance) {
                             updatedTasks.push({
                                 ...template,
                                 id: `${template.id}_${today}`,
-                                completed: false,
-                                completedDate: undefined,
+                                completionCount: 0,
                                 date: today,
-                                isRecurringInstance: true,
+                                templateId: template.id,
                             });
                         }
                     });
@@ -186,9 +221,23 @@ export const useTaskStore = create<TaskStore>()(
                 set((state) => ({
                     manualAdjustment: state.manualAdjustment + delta,
                 })),
+
+            resetStore: () => {
+                set({
+                    children: [],
+                    tasks: [],
+                    activeChildId: null,
+                    manualAdjustment: 0,
+                    version: STORE_VERSION,
+                });
+            },
         }),
         {
             name: 'task-store',
+            merge: (persistedState, currentState) => {
+                const migrated = migrateData(persistedState);
+                return { ...currentState, ...migrated };
+            },
         }
     )
 );

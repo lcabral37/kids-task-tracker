@@ -1,366 +1,196 @@
 import React, { useState } from "react";
-import { Plus, CheckCircle2, Circle, Trash2, Edit2, Save, X, Repeat2 } from "lucide-react";
+import { Plus, Minus, Trash2 } from "lucide-react";
 import { useTaskStore } from "../store/taskStore";
+import DateNavigator from "./DateNavigator";
+import TaskEditPanel from "./TaskEditPanel";
 
 const ActivitiesView: React.FC = () => {
-  const {
-    activeChildId,
-    addTask,
-    toggleTask,
-    removeTask,
-    updateTask,
-    getTasksByChildAndType,
-    getAvailableBalance,
-  } = useTaskStore();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [cost, setCost] = useState(1);
-  const [recurring, setRecurring] = useState<'none' | 'daily'>('none');
+  const { activeChildId, addTask, toggleTask, decrementTask, removeTask, updateTask, getTasksByChildAndType, getAvailableBalance } =
+    useTaskStore();
+  
+  const today = new Date().toISOString().split("T")[0];
+  const [selectedDate, setSelectedDate] = useState(today);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editCost, setEditCost] = useState(1);
-  const [editRecurring, setEditRecurring] = useState<'none' | 'daily'>('none');
-
-  const handleAddActivity = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!activeChildId) {
-      alert("Please select a child first");
-      return;
-    }
-
-    if (!title.trim()) {
-      alert("Please enter an activity title");
-      return;
-    }
-
-    addTask({
-      id: Date.now().toString(),
-      title: title.trim(),
-      description: description.trim(),
-      amount: Math.max(0, cost),
-      completed: false,
-      childId: activeChildId,
-      date: new Date().toISOString().split("T")[0],
-      type: "spending",
-      recurring: recurring,
-    });
-
-    setTitle("");
-    setDescription("");
-    setCost(1);
-    setRecurring('none');
-  };
-
-  const startEdit = (activityId: string, currentTitle: string, currentDescription: string | undefined, currentCost: number, currentRecurring?: 'none' | 'daily') => {
-    setEditingId(activityId);
-    setEditTitle(currentTitle);
-    setEditDescription(currentDescription || "");
-    setEditCost(currentCost);
-    setEditRecurring(currentRecurring || 'none');
-  };
-
-  const saveEdit = (activityId: string) => {
-    if (!editTitle.trim()) {
-      alert("Please enter an activity title");
-      return;
-    }
-
-    updateTask(activityId, {
-      title: editTitle.trim(),
-      description: editDescription.trim(),
-      amount: Math.max(0, editCost),
-      recurring: editRecurring,
-    });
-
-    setEditingId(null);
-    setEditTitle("");
-    setEditDescription("");
-    setEditCost(1);
-    setEditRecurring('none');
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditTitle("");
-    setEditDescription("");
-    setEditCost(1);
-    setEditRecurring('none');
-  };
-
-  const availableBalance = getAvailableBalance();
+  const [isAddingNew, setIsAddingNew] = useState(false);
 
   if (!activeChildId) {
     return (
       <div className="bg-white rounded shadow p-6">
-        <p className="text-gray-500 text-center py-8">
-          Select a child to manage activities
-        </p>
+        <p className="text-gray-500 text-center py-8">Select a child to manage activities</p>
       </div>
     );
   }
 
-  const activities = getTasksByChildAndType(activeChildId, "spending");
-  const spentCount = activities.filter((a) => a.completed).length;
-  const totalSpent = activities
-    .filter((a) => a.completed)
-    .reduce((sum, a) => sum + a.amount, 0);
+  const allActivities = getTasksByChildAndType(activeChildId, "spending");
+  const activitiesForDate = allActivities.filter((t) => t.date === selectedDate);
+
+  const completedCount = activitiesForDate.filter((t) => t.completionCount > 0).length;
+  const totalSpent = activitiesForDate.reduce((sum, t) => sum + t.amount * t.completionCount, 0);
+
+  const handleAddActivity = (data: { title: string; description: string; amount: number; icon: string }) => {
+    // Create a template activity (date === "template")
+    const templateId = Date.now().toString();
+    addTask({
+      id: templateId,
+      title: data.title,
+      description: data.description,
+      amount: Math.max(0, data.amount),
+      completionCount: 0,
+      childId: activeChildId,
+      date: "template", // Marker indicating this is a template
+      type: "spending",
+      icon: data.icon,
+    });
+    setIsAddingNew(false);
+  };
+
+  const handleEditActivity = (activityId: string, data: { title: string; description: string; amount: number; icon: string }) => {
+    updateTask(activityId, {
+      title: data.title,
+      description: data.description,
+      amount: Math.max(0, data.amount),
+      icon: data.icon,
+    });
+    setEditingId(null);
+  };
+
+  const availableBalance = getAvailableBalance();
 
   return (
-    <div className="space-y-6">
-      {/* Activity Info */}
+    <div className="space-y-4">
+      <DateNavigator selectedDate={selectedDate} onDateChange={setSelectedDate} />
+
+      {/* Balance Info */}
       <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded shadow p-6 text-white">
         <p className="text-sm font-medium opacity-90">Available Balance</p>
         <p className="text-4xl font-bold mt-2">💰 {availableBalance}</p>
-        <p className="text-xs opacity-75 mt-2">
-          Spend earned rewards on fun activities!
-        </p>
+        <p className="text-xs opacity-75 mt-2">Spend earned rewards on fun activities!</p>
       </div>
 
-      {/* Add Activity Form */}
-      <form
-        onSubmit={handleAddActivity}
-        className="bg-white rounded shadow p-6"
-      >
-        <h2 className="text-lg font-semibold mb-4">Add New Activity</h2>
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-red-50 rounded p-4 border border-red-200">
+          <p className="text-sm text-gray-600">Activities Done</p>
+          <p className="text-2xl font-bold text-red-600">
+            {completedCount}/{activitiesForDate.length}
+          </p>
+        </div>
+        <div className="bg-orange-50 rounded p-4 border border-orange-200">
+          <p className="text-sm text-gray-600">Total Spent</p>
+          <p className="text-2xl font-bold text-orange-600">💸 {totalSpent}</p>
+        </div>
+      </div>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Activity Title *
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Movie night, Ice cream, Video game time"
-              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add details about the activity (optional)"
-              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-              rows={2}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cost 💸
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="number"
-                value={cost}
-                onChange={(e) => setCost(e.target.valueAsNumber)}
-                placeholder="1"
-                min="0"
-                step="0.5"
-                max={availableBalance}
-                className="flex-1 px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-              <div className="flex items-center px-3 py-2 bg-gray-100 rounded">
-                <span className="text-sm text-gray-600">
-                  Max: {availableBalance}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Recurrence 🔄
-            </label>
-            <select
-              value={recurring}
-              onChange={(e) => setRecurring(e.target.value as 'none' | 'daily')}
-              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-            >
-              <option value="none">One-time only</option>
-              <option value="daily">Daily</option>
-            </select>
-          </div>
-
+      {/* Activity List */}
+      <div className="bg-white rounded shadow p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Activities for {new Date(selectedDate).toLocaleDateString()}</h2>
           <button
-            type="submit"
-            className="w-full flex items-center justify-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded font-medium transition"
+            onClick={() => setIsAddingNew(true)}
+            className="flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded font-medium transition"
           >
             <Plus size={18} /> Add Activity
           </button>
         </div>
-      </form>
 
-      {/* Activities List */}
-      <div className="bg-white rounded shadow p-6">
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-2">Activities</h2>
-          <div className="flex gap-4 text-sm">
-            <div className="bg-purple-50 px-3 py-2 rounded">
-              <span className="text-gray-600">Completed: </span>
-              <span className="font-bold text-purple-600">
-                {spentCount}/{activities.length}
-              </span>
-            </div>
-            <div className="bg-red-50 px-3 py-2 rounded">
-              <span className="text-gray-600">Spent: </span>
-              <span className="font-bold text-red-600">💸 {totalSpent}</span>
-            </div>
-          </div>
-        </div>
-
-        {activities.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">
-            No activities yet. Create one to spend rewards!
-          </p>
+        {activitiesForDate.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">No activities for this day. Add one to spend rewards!</p>
         ) : (
           <div className="space-y-2">
-            {activities.map((activity) => (
+            {activitiesForDate.map((activity) => (
               <div
                 key={activity.id}
-                className={`rounded border transition ${
-                  activity.completed
-                    ? "bg-red-50 border-red-200"
-                    : "bg-gray-50 border-gray-200 hover:border-gray-300"
-                }`}
+                className="flex items-center gap-3 p-4 rounded border bg-gray-50 border-gray-200 hover:border-gray-300 transition"
               >
-                {editingId === activity.id ? (
-                  // Edit mode
-                  <div className="p-4 space-y-3">
-                    <input
-                      type="text"
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                      className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="Activity title"
-                    />
-                    <textarea
-                      value={editDescription}
-                      onChange={(e) => setEditDescription(e.target.value)}
-                      className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                      rows={2}
-                      placeholder="Description (optional)"
-                    />
-                    <input
-                      type="number"
-                      value={editCost}
-                      onChange={(e) => setEditCost(e.target.valueAsNumber)}
-                      min="0"
-                      step="0.5"
-                      className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="Activity cost"
-                    />
-                    <select
-                      value={editRecurring}
-                      onChange={(e) => setEditRecurring(e.target.value as 'none' | 'daily')}
-                      className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    >
-                      <option value="none">One-time only</option>
-                      <option value="daily">Daily</option>
-                    </select>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => saveEdit(activity.id)}
-                        className="flex-1 flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded font-medium"
-                      >
-                        <Save size={16} /> Save
-                      </button>
-                      <button
-                        onClick={cancelEdit}
-                        className="flex-1 flex items-center justify-center gap-2 bg-gray-300 hover:bg-gray-400 text-gray-800 px-3 py-2 rounded font-medium"
-                      >
-                        <X size={16} /> Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  // Display mode
-                  <div className="flex items-center gap-3 p-4">
-                    <button
-                      onClick={() => toggleTask(activity.id)}
-                      className="flex-shrink-0 text-gray-400 hover:text-red-500 transition p-1"
-                      title={
-                        activity.completed
-                          ? "Mark as incomplete"
-                          : "Mark as spent"
-                      }
-                    >
-                      {activity.completed ? (
-                        <CheckCircle2 size={24} className="text-red-500" />
-                      ) : (
-                        <Circle size={24} />
-                      )}
-                    </button>
+                <span className="text-2xl">{activity.icon || "🎁"}</span>
 
-                    <div className="flex-grow min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3
-                          className={`font-medium ${
-                            activity.completed ? "line-through text-gray-500" : ""
-                          }`}
-                        >
-                          {activity.title}
-                        </h3>
-                        {activity.recurring === 'daily' && (
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded flex items-center gap-1 whitespace-nowrap">
-                            <Repeat2 size={12} /> Daily
-                          </span>
-                        )}
-                        {activity.isRecurringInstance && (
-                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded whitespace-nowrap">
-                            Today
-                          </span>
-                        )}
-                      </div>
-                      {activity.description && (
-                        <p className="text-sm text-gray-500">
-                          {activity.description}
-                        </p>
-                      )}
-                    </div>
+                <div className="flex-grow min-w-0">
+                  <h3 className="font-medium">{activity.title}</h3>
+                  {activity.description && (
+                    <p className="text-sm text-gray-500">{activity.description}</p>
+                  )}
+                </div>
 
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="font-semibold text-red-600 whitespace-nowrap">
-                        💸 {activity.amount}
-                      </span>
-                      <button
-                        onClick={() =>
-                          startEdit(
-                            activity.id,
-                            activity.title,
-                            activity.description,
-                            activity.amount,
-                            activity.recurring
-                          )
-                        }
-                        className="text-blue-500 hover:text-blue-700 p-1"
-                        title="Edit activity"
-                      >
-                        <Edit2 size={18} />
-                      </button>
-                      <button
-                        onClick={() => removeTask(activity.id)}
-                        className="text-red-500 hover:text-red-700 p-1"
-                        title="Delete activity"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </div>
-                )}
+                {/* Counter Controls */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => decrementTask(activity.id)}
+                    disabled={activity.completionCount === 0}
+                    className="flex items-center justify-center w-8 h-8 rounded border border-gray-300 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed text-red-600 hover:text-red-700 transition"
+                    title="Decrease count"
+                  >
+                    <Minus size={18} />
+                  </button>
+                  <span className="font-bold text-lg w-8 text-center">{activity.completionCount}</span>
+                  <button
+                    onClick={() => toggleTask(activity.id)}
+                    className="flex items-center justify-center w-8 h-8 rounded border border-gray-300 hover:bg-green-50 text-green-600 hover:text-green-700 transition"
+                    title="Increase count"
+                  >
+                    <Plus size={18} />
+                  </button>
+                </div>
+
+                {/* Cost & Actions */}
+                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                  <span className="font-semibold text-red-600 whitespace-nowrap">
+                    💸 {activity.amount}
+                  </span>
+                  <button
+                    onClick={() => setEditingId(activity.id)}
+                    className="text-blue-500 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50 transition"
+                    title="Edit activity"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => removeTask(activity.id)}
+                    className="text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 transition"
+                    title="Delete activity"
+                  >
+                    🗑️
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Edit Panel */}
+      {editingId && (
+        <TaskEditPanel
+          isOpen={true}
+          onClose={() => setEditingId(null)}
+          onSave={(data) => {
+            const activity = activitiesForDate.find((t) => t.id === editingId);
+            if (activity) {
+              handleEditActivity(editingId, data);
+            }
+          }}
+          initialData={
+            activitiesForDate.find((t) => t.id === editingId)
+              ? {
+                  title: activitiesForDate.find((t) => t.id === editingId)?.title || "",
+                  description: activitiesForDate.find((t) => t.id === editingId)?.description || "",
+                  amount: activitiesForDate.find((t) => t.id === editingId)?.amount || 1,
+                  icon: activitiesForDate.find((t) => t.id === editingId)?.icon || "🎁",
+                }
+              : undefined
+          }
+          title="Edit Activity"
+          type="spending"
+        />
+      )}
+
+      {/* Add Panel */}
+      <TaskEditPanel
+        isOpen={isAddingNew}
+        onClose={() => setIsAddingNew(false)}
+        onSave={handleAddActivity}
+        title="Add New Activity"
+        type="spending"
+      />
     </div>
   );
 };
