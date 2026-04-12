@@ -25,6 +25,7 @@ const TaskForm = () => {
             completed: false,
             childId: activeChildId,
             date: new Date().toISOString().split("T")[0],
+            type: "earning",
         };
         addTask(newTask);
         setTitle("");

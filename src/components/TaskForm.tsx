@@ -29,6 +29,7 @@ const TaskForm: React.FC = () => {
       completed: false,
       childId: activeChildId,
       date: new Date().toISOString().split("T")[0],
+      type: "earning",
     };
 
     addTask(newTask);

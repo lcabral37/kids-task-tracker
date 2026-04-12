@@ -3,7 +3,7 @@ import { CheckCircle2, Circle, Trash2 } from "lucide-react";
 import { useTaskStore } from "../store/taskStore";
 
 const TaskList: React.FC = () => {
-  const { activeChildId, tasks, completeTask, removeTask, getTasksByChild } =
+  const { activeChildId, tasks, toggleTask, removeTask, getTasksByChild } =
     useTaskStore();
 
   if (!activeChildId) {
@@ -56,7 +56,7 @@ const TaskList: React.FC = () => {
               }`}
             >
               <button
-                onClick={() => completeTask(task.id)}
+                onClick={() => toggleTask(task.id)}
                 className="flex-shrink-0 text-gray-400 hover:text-green-500 transition"
                 title={task.completed ? "Task completed" : "Mark as complete"}
               >
