@@ -7,6 +7,7 @@ import TasksView from './components/TasksView';
 import ActivitiesView from './components/ActivitiesView';
 import EarningsDashboardView from './components/EarningsDashboardView';
 import HistoryView from './components/HistoryView';
+import SettingsView from './components/SettingsView';
 
 const App: React.FC = () => {
   const { refreshDailyTasks } = useTaskStore();
@@ -22,14 +23,16 @@ const App: React.FC = () => {
 
   const renderView = () => {
     switch (activeView) {
-      case "dashboard":
+      case 'dashboard':
         return <EarningsDashboardView />;
-      case "tasks":
+      case 'tasks':
         return <TasksView />;
-      case "activities":
+      case 'activities':
         return <ActivitiesView />;
-      case "history":
+      case 'history':
         return <HistoryView />;
+      case 'settings':
+        return <SettingsView />;
       default:
         return <EarningsDashboardView />;
     }

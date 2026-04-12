@@ -44,6 +44,7 @@ interface TaskStore {
     addChild: (child: Omit<Child, 'manualAdjustment'>) => void;
     removeChild: (id: string) => void;
     setActiveChild: (id: string) => void;
+    updateChild: (id: string, updates: Partial<Child>) => void;
     updateChildBalance: (childId: string, delta: number) => void;
     transferBalance: (fromChildId: string, toChildId: string, amount: number) => void;
 
@@ -96,6 +97,13 @@ export const useTaskStore = create<TaskStore>()(
                 })),
 
             setActiveChild: (id) => set({ activeChildId: id }),
+
+            updateChild: (id, updates) =>
+                set((state) => ({
+                    children: state.children.map((child) =>
+                        child.id === id ? { ...child, ...updates } : child
+                    ),
+                })),
 
             updateChildBalance: (childId, delta) =>
                 set((state) => ({
