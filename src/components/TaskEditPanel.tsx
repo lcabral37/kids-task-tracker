@@ -57,6 +57,7 @@ const TaskEditPanel: React.FC<TaskEditPanelProps> = ({
                 amount: formData.amount,
                 type: taskType,
                 icon: formData.icon,
+                order: 0, // Will be set by addTaskTemplate based on template count
             });
         }
 

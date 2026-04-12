@@ -11,6 +11,7 @@ export interface TaskTemplate {
     amount: number;
     type: 'earning' | 'spending';
     icon?: string;
+    order: number; // Display order (0-indexed)
 }
 
 // Occurrence/Completion record - tracks per-child per-day activity
@@ -22,12 +23,13 @@ export interface TaskOccurrence {
     completionCount: number;
 }
 
-// Child with per-child balance
+// Child with per-child balance and PIN protection
 export interface Child {
     id: string;
     name: string;
     age: number;
     manualAdjustment: number; // Per-child manual adjustment
+    pin?: string; // 4-6 digit PIN for protection (optional)
 }
 
 interface TaskStore {
@@ -50,6 +52,7 @@ interface TaskStore {
     removeTaskTemplate: (id: string) => void;
     updateTaskTemplate: (id: string, updates: Partial<TaskTemplate>) => void;
     getTaskTemplates: (type: 'earning' | 'spending') => TaskTemplate[];
+    reorderTemplates: (type: 'earning' | 'spending', orderedIds: string[]) => void;
 
     // Occurrences (per-child per-day tracking)
     getOccurrencesForDate: (childId: string, date: string) => TaskOccurrence[];
@@ -132,15 +135,28 @@ export const useTaskStore = create<TaskStore>()(
 
             // Task templates
             addTaskTemplate: (template) =>
-                set((state) => ({
-                    taskTemplates: [...state.taskTemplates, template],
-                })),
+                set((state) => {
+                    const templates = state.taskTemplates.filter((t) => t.type === template.type);
+                    return {
+                        taskTemplates: [...state.taskTemplates, { ...template, order: templates.length }],
+                    };
+                }),
 
             removeTaskTemplate: (id) =>
-                set((state) => ({
-                    taskTemplates: state.taskTemplates.filter((t) => t.id !== id),
-                    occurrences: state.occurrences.filter((o) => o.templateId !== id),
-                })),
+                set((state) => {
+                    const removed = state.taskTemplates.find((t) => t.id === id);
+                    if (!removed) return state;
+                    return {
+                        taskTemplates: state.taskTemplates
+                            .filter((t) => t.id !== id)
+                            .map((t) =>
+                                t.type === removed.type && t.order > removed.order
+                                    ? { ...t, order: t.order - 1 }
+                                    : t
+                            ),
+                        occurrences: state.occurrences.filter((o) => o.templateId !== id),
+                    };
+                }),
 
             updateTaskTemplate: (id, updates) =>
                 set((state) => ({
@@ -151,7 +167,19 @@ export const useTaskStore = create<TaskStore>()(
 
             getTaskTemplates: (type) => {
                 const state = get();
-                return state.taskTemplates.filter((t) => t.type === type);
+                return state.taskTemplates.filter((t) => t.type === type).sort((a, b) => a.order - b.order);
+            },
+
+            reorderTemplates: (type, orderedIds) => {
+                set((state) => ({
+                    taskTemplates: state.taskTemplates.map((t) => {
+                        if (t.type === type) {
+                            const newOrder = orderedIds.indexOf(t.id);
+                            return { ...t, order: newOrder };
+                        }
+                        return t;
+                    }),
+                }));
             },
 
             // Occurrences
