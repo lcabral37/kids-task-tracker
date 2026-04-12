@@ -11,12 +11,11 @@ const ChildSelector: React.FC = () => {
   const handleAddChild = (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.name.trim()) {
-      const newChild: Child = {
+      addChild({
         id: Date.now().toString(),
         name: formData.name.trim(),
         age: parseInt(formData.age.toString()),
-      };
-      addChild(newChild);
+      });
       setFormData({ name: "", age: 10 });
       setShowAddForm(false);
     }

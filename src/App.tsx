@@ -1,22 +1,20 @@
-import React, { useEffect, useState } from "react";
-import { registerServiceWorker } from "./services/swRegister";
-import { useTaskStore } from "./store/taskStore";
-import db from "./db/database";
-import ChildSelector from "./components/ChildList";
-import Navigation, { ViewType } from "./components/Navigation";
-import TasksView from "./components/TasksView";
-import ActivitiesView from "./components/ActivitiesView";
-import EarningsDashboardView from "./components/EarningsDashboardView";
-import HistoryView from "./components/HistoryView";
+import React, { useEffect, useState } from 'react';
+import { registerServiceWorker } from './services/swRegister';
+import { useTaskStore } from './store/taskStore';
+import ChildSelector from './components/ChildList';
+import Navigation, { ViewType } from './components/Navigation';
+import TasksView from './components/TasksView';
+import ActivitiesView from './components/ActivitiesView';
+import EarningsDashboardView from './components/EarningsDashboardView';
+import HistoryView from './components/HistoryView';
 
 const App: React.FC = () => {
-  const { children: storeChildren, tasks: storeTasks, addChild, addTask, refreshDailyTasks } =
-    useTaskStore();
-  const [activeView, setActiveView] = useState<ViewType>("dashboard");
+  const { refreshDailyTasks } = useTaskStore();
+  const [activeView, setActiveView] = useState<ViewType>('dashboard');
 
   useEffect(() => {
     // Register service worker for offline support
-    registerServiceWorker("/sw.js");
+    registerServiceWorker('/sw.js');
 
     // Refresh daily recurring tasks on each app load
     refreshDailyTasks();

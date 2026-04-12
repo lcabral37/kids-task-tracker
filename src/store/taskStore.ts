@@ -1,76 +1,71 @@
 import create from 'zustand';
 import { persist } from 'zustand/middleware';
 
-const STORE_VERSION = 2;
+const STORE_VERSION = 3;
 
-// Migration helper
-const migrateData = (data: any) => {
-    const version = data.version || 1;
-    
-    if (version < STORE_VERSION) {
-        console.log(`Migrating from v${version} to v${STORE_VERSION}`);
-        
-        if (version === 1) {
-            // v1 -> v2: Convert from boolean completed to numeric completionCount
-            if (data.tasks) {
-                data.tasks = data.tasks.map((task: any) => ({
-                    ...task,
-                    completionCount: task.completed ? 1 : 0,
-                    completed: undefined,
-                    completedDate: undefined,
-                }));
-            }
-        }
-        
-        data.version = STORE_VERSION;
-    }
-    
-    return data;
-};
-
-export interface Task {
+// Task/Activity Template - shared across all children
+export interface TaskTemplate {
     id: string;
     title: string;
     description?: string;
     amount: number;
-    completionCount: number;
-    childId: string;
-    date: string;
     type: 'earning' | 'spending';
     icon?: string;
-    templateId?: string;
 }
 
+// Occurrence/Completion record - tracks per-child per-day activity
+export interface TaskOccurrence {
+    id: string;
+    templateId: string;
+    childId: string;
+    date: string;
+    completionCount: number;
+}
+
+// Child with per-child balance
 export interface Child {
     id: string;
     name: string;
     age: number;
+    manualAdjustment: number; // Per-child manual adjustment
 }
 
 interface TaskStore {
+    // Data
     children: Child[];
-    tasks: Task[];
+    taskTemplates: TaskTemplate[];
+    occurrences: TaskOccurrence[];
     activeChildId: string | null;
-    manualAdjustment: number;
     version: number;
-    addChild: (child: Child) => void;
+
+    // Child management
+    addChild: (child: Omit<Child, 'manualAdjustment'>) => void;
     removeChild: (id: string) => void;
-    addTask: (task: Task) => void;
-    completeTask: (id: string) => void;
-    toggleTask: (id: string) => void;
-    decrementTask: (id: string) => void;
-    removeTask: (id: string) => void;
     setActiveChild: (id: string) => void;
-    getDailyEarnings: (date: string) => number;
-    getTotalEarnings: () => number;
-    getTasksByChild: (childId: string) => Task[];
-    getTasksByChildAndType: (childId: string, type: 'earning' | 'spending') => Task[];
-    updateTask: (id: string, updates: Partial<Task>) => void;
-    getAvailableBalance: () => number;
-    getSpentToday: (date: string) => number;
+    updateChildBalance: (childId: string, delta: number) => void;
+    transferBalance: (fromChildId: string, toChildId: string, amount: number) => void;
+
+    // Task templates (independent of child)
+    addTaskTemplate: (template: TaskTemplate) => void;
+    removeTaskTemplate: (id: string) => void;
+    updateTaskTemplate: (id: string, updates: Partial<TaskTemplate>) => void;
+    getTaskTemplates: (type: 'earning' | 'spending') => TaskTemplate[];
+
+    // Occurrences (per-child per-day tracking)
+    getOccurrencesForDate: (childId: string, date: string) => TaskOccurrence[];
+    incrementOccurrence: (templateId: string, childId: string, date: string) => void;
+    decrementOccurrence: (templateId: string, childId: string, date: string) => void;
+    removeOccurrence: (occurenceId: string) => void;
     refreshDailyTasks: () => void;
-    setManualAdjustment: (amount: number) => void;
-    adjustBalance: (delta: number) => void;
+
+    // Calculations per-child
+    getChildBalance: (childId: string) => number;
+    getChildDailyEarnings: (childId: string, date: string) => number;
+    getChildDailySpending: (childId: string, date: string) => number;
+    getChildTotalEarnings: (childId: string) => number;
+    getChildTotalSpending: (childId: string) => number;
+
+    // Reset
     resetStore: () => void;
 }
 
@@ -78,165 +73,268 @@ export const useTaskStore = create<TaskStore>()(
     persist(
         (set, get) => ({
             children: [],
-            tasks: [],
+            taskTemplates: [],
+            occurrences: [],
             activeChildId: null,
-            manualAdjustment: 0,
             version: STORE_VERSION,
 
+            // Child management
             addChild: (child) =>
                 set((state) => ({
-                    children: [...state.children, child],
+                    children: [...state.children, { ...child, manualAdjustment: 0 }],
                     activeChildId: state.activeChildId || child.id,
                 })),
 
             removeChild: (id) =>
                 set((state) => ({
                     children: state.children.filter((c) => c.id !== id),
+                    occurrences: state.occurrences.filter((o) => o.childId !== id),
                     activeChildId: state.activeChildId === id ? null : state.activeChildId,
-                })),
-
-            addTask: (task) =>
-                set((state) => ({
-                    tasks: [...state.tasks, task],
-                })),
-
-            removeTask: (id: string) =>
-                set((state) => ({
-                    tasks: state.tasks.filter((t) => t.id !== id),
-                })),
-
-            completeTask: (id: string) =>
-                set((state) => ({
-                    tasks: state.tasks.map((task) =>
-                        task.id === id
-                            ? { ...task, completionCount: task.completionCount + 1 }
-                            : task
-                    ),
-                })),
-
-            toggleTask: (id: string) =>
-                set((state) => ({
-                    tasks: state.tasks.map((task) =>
-                        task.id === id
-                            ? {
-                                ...task,
-                                completionCount: task.completionCount + 1,
-                            }
-                            : task
-                    ),
-                })),
-
-            updateTask: (id, updates) =>
-                set((state) => ({
-                    tasks: state.tasks.map((task) =>
-                        task.id === id ? { ...task, ...updates } : task
-                    ),
-                })),
-
-            decrementTask: (id: string) =>
-                set((state) => ({
-                    tasks: state.tasks.map((task) =>
-                        task.id === id && task.completionCount > 0
-                            ? { ...task, completionCount: task.completionCount - 1 }
-                            : task
-                    ),
                 })),
 
             setActiveChild: (id) => set({ activeChildId: id }),
 
-            getDailyEarnings: (date) => {
-                const state = get();
-                return state.tasks
-                    .filter((t) => t.date === date && t.type === 'earning')
-                    .reduce((sum, t) => sum + t.amount * t.completionCount, 0);
+            updateChildBalance: (childId, delta) =>
+                set((state) => ({
+                    children: state.children.map((child) =>
+                        child.id === childId
+                            ? { ...child, manualAdjustment: child.manualAdjustment + delta }
+                            : child
+                    ),
+                })),
+
+            transferBalance: (fromChildId, toChildId, amount) => {
+                set((state) => {
+                    const fromChild = state.children.find((c) => c.id === fromChildId);
+                    const toChild = state.children.find((c) => c.id === toChildId);
+
+                    if (!fromChild || !toChild) return state;
+
+                    const fromBalance = get().getChildBalance(fromChildId);
+                    if (fromBalance < amount) {
+                        console.warn(`Cannot transfer ${amount}: ${fromChild.name} only has ${fromBalance}`);
+                        return state;
+                    }
+
+                    return {
+                        children: state.children.map((child) => {
+                            if (child.id === fromChildId) {
+                                return { ...child, manualAdjustment: child.manualAdjustment - amount };
+                            }
+                            if (child.id === toChildId) {
+                                return { ...child, manualAdjustment: child.manualAdjustment + amount };
+                            }
+                            return child;
+                        }),
+                    };
+                });
             },
 
-            getTotalEarnings: () => {
+            // Task templates
+            addTaskTemplate: (template) =>
+                set((state) => ({
+                    taskTemplates: [...state.taskTemplates, template],
+                })),
+
+            removeTaskTemplate: (id) =>
+                set((state) => ({
+                    taskTemplates: state.taskTemplates.filter((t) => t.id !== id),
+                    occurrences: state.occurrences.filter((o) => o.templateId !== id),
+                })),
+
+            updateTaskTemplate: (id, updates) =>
+                set((state) => ({
+                    taskTemplates: state.taskTemplates.map((t) =>
+                        t.id === id ? { ...t, ...updates } : t
+                    ),
+                })),
+
+            getTaskTemplates: (type) => {
                 const state = get();
-                return state.tasks
-                    .filter((t) => t.type === 'earning' && t.date !== 'template')
-                    .reduce((sum, t) => sum + t.amount * t.completionCount, 0);
+                return state.taskTemplates.filter((t) => t.type === type);
             },
 
-            getSpentToday: (date) => {
+            // Occurrences
+            getOccurrencesForDate: (childId, date) => {
                 const state = get();
-                return state.tasks
-                    .filter((t) => t.date === date && t.type === 'spending' && t.date !== 'template')
-                    .reduce((sum, t) => sum + t.amount * t.completionCount, 0);
+                return state.occurrences.filter((o) => o.childId === childId && o.date === date);
             },
 
-            getAvailableBalance: () => {
-                const state = get();
-                const earned = state.tasks
-                    .filter((t) => t.type === 'earning' && t.date !== 'template')
-                    .reduce((sum, t) => sum + t.amount * t.completionCount, 0);
-                const spent = state.tasks
-                    .filter((t) => t.type === 'spending' && t.date !== 'template')
-                    .reduce((sum, t) => sum + t.amount * t.completionCount, 0);
-                return earned - spent + state.manualAdjustment;
+            incrementOccurrence: (templateId, childId, date) => {
+                set((state) => {
+                    const existing = state.occurrences.find(
+                        (o) => o.templateId === templateId && o.childId === childId && o.date === date
+                    );
+
+                    if (existing) {
+                        return {
+                            occurrences: state.occurrences.map((o) =>
+                                o.id === existing.id
+                                    ? { ...o, completionCount: o.completionCount + 1 }
+                                    : o
+                            ),
+                        };
+                    } else {
+                        return {
+                            occurrences: [
+                                ...state.occurrences,
+                                {
+                                    id: `${templateId}_${childId}_${date}_${Date.now()}`,
+                                    templateId,
+                                    childId,
+                                    date,
+                                    completionCount: 1,
+                                },
+                            ],
+                        };
+                    }
+                });
             },
 
-            getTasksByChild: (childId) => {
-                const state = get();
-                return state.tasks.filter((t) => t.childId === childId);
+            decrementOccurrence: (templateId, childId, date) => {
+                set((state) => {
+                    const existing = state.occurrences.find(
+                        (o) => o.templateId === templateId && o.childId === childId && o.date === date
+                    );
+
+                    if (existing && existing.completionCount > 0) {
+                        return {
+                            occurrences: state.occurrences.map((o) =>
+                                o.id === existing.id
+                                    ? { ...o, completionCount: o.completionCount - 1 }
+                                    : o
+                            ),
+                        };
+                    }
+                    return state;
+                });
             },
 
-            getTasksByChildAndType: (childId, type) => {
-                const state = get();
-                return state.tasks.filter((t) => t.childId === childId && t.type === type);
-            },
+            removeOccurrence: (occurrenceId) =>
+                set((state) => ({
+                    occurrences: state.occurrences.filter((o) => o.id !== occurrenceId),
+                })),
 
             refreshDailyTasks: () => {
                 const today = new Date().toISOString().split('T')[0];
                 set((state) => {
-                    const updatedTasks = [...state.tasks];
-                    // Get all template tasks (those with date === "template")
-                    const templates = state.tasks.filter((t) => t.date === 'template');
+                    // For each child and each template, ensure an occurrence exists for today
+                    let updatedOccurrences = [...state.occurrences];
 
-                    templates.forEach((template) => {
-                        // Check if today's instance already exists
-                        const todayInstance = updatedTasks.find(
-                            (t) => t.templateId === template.id && t.date === today
-                        );
+                    state.children.forEach((child) => {
+                        state.taskTemplates.forEach((template) => {
+                            const exists = updatedOccurrences.find(
+                                (o) => o.templateId === template.id && o.childId === child.id && o.date === today
+                            );
 
-                        // If no instance for today, create one with completionCount reset to 0
-                        if (!todayInstance) {
-                            updatedTasks.push({
-                                ...template,
-                                id: `${template.id}_${today}`,
-                                completionCount: 0,
-                                date: today,
-                                templateId: template.id,
-                            });
-                        }
+                            if (!exists) {
+                                updatedOccurrences.push({
+                                    id: `${template.id}_${child.id}_${today}_${Date.now()}`,
+                                    templateId: template.id,
+                                    childId: child.id,
+                                    date: today,
+                                    completionCount: 0,
+                                });
+                            }
+                        });
                     });
 
-                    return { tasks: updatedTasks };
+                    return { occurrences: updatedOccurrences };
                 });
             },
 
-            setManualAdjustment: (amount) => set({ manualAdjustment: amount }),
+            // Per-child calculations
+            getChildBalance: (childId) => {
+                const state = get();
+                const earned = state.occurrences
+                    .filter((o) => o.childId === childId)
+                    .reduce((sum, o) => {
+                        const template = state.taskTemplates.find((t) => t.id === o.templateId);
+                        return template && template.type === 'earning'
+                            ? sum + template.amount * o.completionCount
+                            : sum;
+                    }, 0);
 
-            adjustBalance: (delta) => 
-                set((state) => ({
-                    manualAdjustment: state.manualAdjustment + delta,
-                })),
+                const spent = state.occurrences
+                    .filter((o) => o.childId === childId)
+                    .reduce((sum, o) => {
+                        const template = state.taskTemplates.find((t) => t.id === o.templateId);
+                        return template && template.type === 'spending'
+                            ? sum + template.amount * o.completionCount
+                            : sum;
+                    }, 0);
+
+                const child = state.children.find((c) => c.id === childId);
+                return earned - spent + (child?.manualAdjustment || 0);
+            },
+
+            getChildDailyEarnings: (childId, date) => {
+                const state = get();
+                return state.occurrences
+                    .filter((o) => o.childId === childId && o.date === date)
+                    .reduce((sum, o) => {
+                        const template = state.taskTemplates.find((t) => t.id === o.templateId);
+                        return template && template.type === 'earning'
+                            ? sum + template.amount * o.completionCount
+                            : sum;
+                    }, 0);
+            },
+
+            getChildDailySpending: (childId, date) => {
+                const state = get();
+                return state.occurrences
+                    .filter((o) => o.childId === childId && o.date === date)
+                    .reduce((sum, o) => {
+                        const template = state.taskTemplates.find((t) => t.id === o.templateId);
+                        return template && template.type === 'spending'
+                            ? sum + template.amount * o.completionCount
+                            : sum;
+                    }, 0);
+            },
+
+            getChildTotalEarnings: (childId) => {
+                const state = get();
+                return state.occurrences
+                    .filter((o) => o.childId === childId)
+                    .reduce((sum, o) => {
+                        const template = state.taskTemplates.find((t) => t.id === o.templateId);
+                        return template && template.type === 'earning'
+                            ? sum + template.amount * o.completionCount
+                            : sum;
+                    }, 0);
+            },
+
+            getChildTotalSpending: (childId) => {
+                const state = get();
+                return state.occurrences
+                    .filter((o) => o.childId === childId)
+                    .reduce((sum, o) => {
+                        const template = state.taskTemplates.find((t) => t.id === o.templateId);
+                        return template && template.type === 'spending'
+                            ? sum + template.amount * o.completionCount
+                            : sum;
+                    }, 0);
+            },
 
             resetStore: () => {
                 set({
                     children: [],
-                    tasks: [],
+                    taskTemplates: [],
+                    occurrences: [],
                     activeChildId: null,
-                    manualAdjustment: 0,
                     version: STORE_VERSION,
                 });
             },
         }),
         {
             name: 'task-store',
-            merge: (persistedState, currentState) => {
-                const migrated = migrateData(persistedState);
-                return { ...currentState, ...migrated };
+            merge: (persistedState: any, currentState) => {
+                // Version 3 is a complete rewrite - don't migrate, start fresh
+                if (persistedState.version < STORE_VERSION) {
+                    console.log('Version 3: Starting fresh with new data model');
+                    return currentState;
+                }
+                return { ...currentState, ...persistedState };
             },
         }
     )
