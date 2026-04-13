@@ -1,10 +1,11 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import os from 'os';
 import { initDatabase, closeDatabase } from './database.js';
 import * as service from './service.js';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 
 // Middleware
 app.use(cors());
@@ -253,8 +254,24 @@ const startServer = async () => {
         await initDatabase();
         console.log('✅ Database initialized');
 
-        app.listen(PORT, () => {
-            console.log(`\n🎯 Kids Task Tracker Server running on http://localhost:${PORT}`);
+        app.listen(PORT, '0.0.0.0', () => {
+            // Get external IP
+            const interfaces = os.networkInterfaces();
+            let externalIp = 'localhost';
+            
+            for (const name of Object.keys(interfaces)) {
+                for (const iface of interfaces[name]) {
+                    // Skip internal and non-IPv4 addresses
+                    if (iface.family === 'IPv4' && !iface.internal) {
+                        externalIp = iface.address;
+                        break;
+                    }
+                }
+            }
+
+            console.log(`\n🎯 Kids Task Tracker Server running`);
+            console.log(`   Local:    http://localhost:${PORT}`);
+            console.log(`   External: http://${externalIp}:${PORT}`);
             console.log(`📍 API endpoints:`);
             console.log(`   GET  /api/health - Health check`);
             console.log(`   GET  /api/children - List all children`);
