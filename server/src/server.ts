@@ -255,21 +255,32 @@ const startServer = async () => {
         console.log('✅ Database initialized');
 
         app.listen(PORT, '0.0.0.0', () => {
-            // Get external IP
+            // Get external IP - prefer non-docker IPs
             const interfaces = os.networkInterfaces();
             let externalIp = 'localhost';
+            let dockerIp = 'localhost';
             
             for (const name of Object.keys(interfaces)) {
                 const ifaces = interfaces[name];
                 if (ifaces) {
                     for (const iface of ifaces) {
-                        // Skip internal and non-IPv4 addresses
+                        // Only consider IPv4 and non-internal addresses
                         if (iface.family === 'IPv4' && !iface.internal) {
-                            externalIp = iface.address;
-                            break;
+                            // Check if it's a Docker/container IP (starts with 172.17 or 172.18)
+                            if (iface.address.startsWith('172.17.') || iface.address.startsWith('172.18.')) {
+                                dockerIp = iface.address;
+                            } else {
+                                // Prefer real network IPs (e.g., 192.168.x.x, 10.x.x.x)
+                                externalIp = iface.address;
+                            }
                         }
                     }
                 }
+            }
+            
+            // Fall back to docker IP if no real network IP found
+            if (externalIp === 'localhost' && dockerIp !== 'localhost') {
+                externalIp = dockerIp;
             }
 
             console.log(`\n🎯 Kids Task Tracker Server running`);
