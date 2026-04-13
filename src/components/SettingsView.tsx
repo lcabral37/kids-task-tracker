@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings, QrCode, Lock, Copy, Check, Cloud, CloudOff } from 'lucide-react';
+import { Settings, QrCode, Lock, Copy, Check, Cloud, CloudOff, Globe } from 'lucide-react';
 import QR from 'qrcode';
 import { useTaskStore } from '../store/taskStore';
-import { syncApi, checkBackendConnectivity } from '../services/backend';
+import { syncApi, checkBackendConnectivity, getBackendUrl } from '../services/backend';
 
 export default function SettingsView() {
     const store = useTaskStore();
@@ -21,12 +21,13 @@ export default function SettingsView() {
     const [newPin, setNewPin] = useState('');
     const [confirmPin, setConfirmPin] = useState('');
     const [pinError, setPinError] = useState('');
-    const [copied, setCopied] = useState<'childurl' | 'appurl' | null>(null);
+    const [copied, setCopied] = useState<'childurl' | 'appurl' | 'pwaurl' | 'apiurl' | null>(null);
     const [backendConnected, setBackendConnected] = useState(false);
     const [syncing, setSyncing] = useState(false);
     const [syncMessage, setSyncMessage] = useState('');
 
     const appUrl = window.location.origin;
+    const apiUrl = getBackendUrl();
     const childUrl = activeChildId ? `${appUrl}?child=${activeChildId}` : '';
 
     // Check backend connectivity on mount and periodically
@@ -444,6 +445,65 @@ export default function SettingsView() {
                     </div>
                 </div>
             )}
+
+            {/* Server URLs Section */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div className="flex items-center mb-4">
+                    <Globe className="w-5 h-5 text-blue-600 mr-2" />
+                    <h3 className="font-semibold text-gray-800">Server URLs</h3>
+                </div>
+                <div className="space-y-4">
+                    {/* PWA URL */}
+                    <div>
+                        <label className="text-xs font-medium text-gray-500 uppercase">PWA Application</label>
+                        <div className="flex items-center mt-1 bg-gray-50 rounded p-3 border border-gray-200">
+                            <code className="flex-1 text-xs text-gray-700 break-all font-mono">{appUrl}</code>
+                            <button
+                                onClick={() => {
+                                    navigator.clipboard.writeText(appUrl);
+                                    setCopied('pwaurl');
+                                    setTimeout(() => setCopied(null), 2000);
+                                }}
+                                className="ml-2 p-2 hover:bg-gray-200 rounded transition-colors"
+                                title="Copy PWA URL"
+                            >
+                                {copied === 'pwaurl' ? (
+                                    <Check className="w-4 h-4 text-green-600" />
+                                ) : (
+                                    <Copy className="w-4 h-4 text-gray-600" />
+                                )}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* API URL */}
+                    <div>
+                        <label className="text-xs font-medium text-gray-500 uppercase">Backend API</label>
+                        <div className="flex items-center mt-1 bg-gray-50 rounded p-3 border border-gray-200">
+                            <code className="flex-1 text-xs text-gray-700 break-all font-mono">{apiUrl}</code>
+                            <button
+                                onClick={() => {
+                                    navigator.clipboard.writeText(apiUrl);
+                                    setCopied('apiurl');
+                                    setTimeout(() => setCopied(null), 2000);
+                                }}
+                                className="ml-2 p-2 hover:bg-gray-200 rounded transition-colors"
+                                title="Copy API URL"
+                            >
+                                {copied === 'apiurl' ? (
+                                    <Check className="w-4 h-4 text-green-600" />
+                                ) : (
+                                    <Copy className="w-4 h-4 text-gray-600" />
+                                )}
+                            </button>
+                        </div>
+                    </div>
+
+                    <p className="text-xs text-gray-500 mt-3">
+                        Use these URLs when accessing the app from another device or for backend integration.
+                    </p>
+                </div>
+            </div>
 
             {/* About Section */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
