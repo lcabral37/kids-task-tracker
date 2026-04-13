@@ -15,6 +15,9 @@ export default function SettingsView() {
     const [showChildQR, setShowChildQR] = useState(false);
     const [showAppQR, setShowAppQR] = useState(false);
     const [showPinChange, setShowPinChange] = useState(false);
+    const [showEditChild, setShowEditChild] = useState(false);
+    const [editName, setEditName] = useState(activeChild?.name || '');
+    const [editAge, setEditAge] = useState(activeChild?.age || 0);
     const [newPin, setNewPin] = useState('');
     const [confirmPin, setConfirmPin] = useState('');
     const [pinError, setPinError] = useState('');
@@ -90,6 +93,28 @@ export default function SettingsView() {
         }
     };
 
+    const handleSaveChildEdits = (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        if (!editName.trim()) {
+            alert('Please enter a name');
+            return;
+        }
+
+        if (editAge < 1 || editAge > 120) {
+            alert('Please enter a valid age (1-120)');
+            return;
+        }
+
+        if (activeChildId) {
+            store.updateChild(activeChildId, { 
+                name: editName, 
+                age: editAge 
+            });
+            setShowEditChild(false);
+        }
+    };
+
     const handleSync = async () => {
         if (!backendConnected || !activeChildId) return;
 
@@ -136,6 +161,65 @@ export default function SettingsView() {
                         <p className="text-sm text-gray-600">Manage {activeChild.name}'s security and sharing</p>
                     </div>
                 </div>
+            </div>
+
+            {/* Child Profile Section */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-gray-800">Profile</h3>
+                    <button
+                        onClick={() => {
+                            setEditName(activeChild.name);
+                            setEditAge(activeChild.age);
+                            setShowEditChild(!showEditChild);
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                        {showEditChild ? 'Cancel' : 'Edit'}
+                    </button>
+                </div>
+
+                {!showEditChild ? (
+                    <div className="space-y-3">
+                        <div>
+                            <p className="text-sm text-gray-600">Name</p>
+                            <p className="font-medium text-gray-800">{activeChild.name}</p>
+                        </div>
+                        <div>
+                            <p className="text-sm text-gray-600">Age</p>
+                            <p className="font-medium text-gray-800">{activeChild.age} years old</p>
+                        </div>
+                    </div>
+                ) : (
+                    <form onSubmit={handleSaveChildEdits} className="space-y-3">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                            <input
+                                type="text"
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                            <input
+                                type="number"
+                                min="1"
+                                max="120"
+                                value={editAge}
+                                onChange={(e) => setEditAge(Math.max(1, Math.min(120, parseInt(e.target.value) || 0)))}
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            className="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-medium transition"
+                        >
+                            Save Changes
+                        </button>
+                    </form>
+                )}
             </div>
 
             {/* PIN Security Section */}
