@@ -3,7 +3,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.join(__dirname, '../data/tasks.db');
+
+// Support DATABASE_URL env var for Docker deployments, fallback to default
+const DB_PATH = process.env.DATABASE_URL || path.join(__dirname, '../data/tasks.db');
 
 // Ensure data directory exists
 import fs from 'fs';
