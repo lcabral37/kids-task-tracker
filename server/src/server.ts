@@ -260,11 +260,14 @@ const startServer = async () => {
             let externalIp = 'localhost';
             
             for (const name of Object.keys(interfaces)) {
-                for (const iface of interfaces[name]) {
-                    // Skip internal and non-IPv4 addresses
-                    if (iface.family === 'IPv4' && !iface.internal) {
-                        externalIp = iface.address;
-                        break;
+                const ifaces = interfaces[name];
+                if (ifaces) {
+                    for (const iface of ifaces) {
+                        // Skip internal and non-IPv4 addresses
+                        if (iface.family === 'IPv4' && !iface.internal) {
+                            externalIp = iface.address;
+                            break;
+                        }
                     }
                 }
             }

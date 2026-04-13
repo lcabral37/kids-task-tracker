@@ -218,13 +218,16 @@ export const bulkUpsertData = async (data: SyncData): Promise<void> => {
     // Upsert task templates
     for (const template of data.taskTemplates) {
         const existing = await getTaskTemplate(template.id);
+        // Ensure order has a default value if missing
+        const order = template.order !== undefined ? template.order : 0;
+        
         if (existing) {
-            await updateTaskTemplate(template.id, template);
+            await updateTaskTemplate(template.id, { ...template, order });
         } else {
             // Insert directly to preserve ID
             await dbRun(
                 `INSERT OR REPLACE INTO taskTemplates (id, title, description, amount, type, icon, "order") VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                [template.id, template.title, template.description || null, template.amount, template.type, template.icon || null, template.order]
+                [template.id, template.title, template.description || null, template.amount, template.type, template.icon || null, order]
             );
         }
     }
