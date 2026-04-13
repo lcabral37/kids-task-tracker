@@ -4,7 +4,7 @@ import { initDatabase, closeDatabase } from './database.js';
 import * as service from './service.js';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());

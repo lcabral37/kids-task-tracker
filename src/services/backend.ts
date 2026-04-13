@@ -1,7 +1,7 @@
 import { Child, TaskTemplate, TaskOccurrence, SyncData } from '../store/taskStore';
 
 // Configure the backend URL - can be overridden
-let BACKEND_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
+let BACKEND_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000';
 
 export const setBackendUrl = (url: string) => {
     BACKEND_URL = url;
