@@ -32,6 +32,14 @@ export interface Child {
     pin?: string; // 4-6 digit PIN for protection (optional)
 }
 
+// Sync data structure for backend
+export interface SyncData {
+    children: Child[];
+    taskTemplates: TaskTemplate[];
+    occurrences: TaskOccurrence[];
+    version: number;
+}
+
 interface TaskStore {
     // Data
     children: Child[];
@@ -39,10 +47,14 @@ interface TaskStore {
     occurrences: TaskOccurrence[];
     activeChildId: string | null;
     version: number;
+    backendEnabled: boolean;
+    lastSyncTime: number | null;
 
     // Child management
     addChild: (child: Omit<Child, 'manualAdjustment'>) => void;
     removeChild: (id: string) => void;
+    setBackendEnabled: (enabled: boolean) => void;
+    setLastSyncTime: (time: number | null) => void;
     setActiveChild: (id: string) => void;
     updateChild: (id: string, updates: Partial<Child>) => void;
     updateChildBalance: (childId: string, delta: number) => void;
@@ -81,6 +93,8 @@ export const useTaskStore = create<TaskStore>()(
             occurrences: [],
             activeChildId: null,
             version: STORE_VERSION,
+            backendEnabled: false,
+            lastSyncTime: null,
 
             // Child management
             addChild: (child) =>
@@ -95,6 +109,9 @@ export const useTaskStore = create<TaskStore>()(
                     occurrences: state.occurrences.filter((o) => o.childId !== id),
                     activeChildId: state.activeChildId === id ? null : state.activeChildId,
                 })),
+
+            setBackendEnabled: (enabled) => set({ backendEnabled: enabled }),
+            setLastSyncTime: (time) => set({ lastSyncTime: time }),
 
             setActiveChild: (id) => set({ activeChildId: id }),
 

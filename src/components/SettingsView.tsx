@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings, QrCode, Lock, Copy, Check } from 'lucide-react';
+import { Settings, QrCode, Lock, Copy, Check, Cloud, CloudOff } from 'lucide-react';
 import QR from 'qrcode';
 import { useTaskStore } from '../store/taskStore';
+import { syncApi, checkBackendConnectivity } from '../services/backend';
 
 export default function SettingsView() {
     const store = useTaskStore();
@@ -18,9 +19,24 @@ export default function SettingsView() {
     const [confirmPin, setConfirmPin] = useState('');
     const [pinError, setPinError] = useState('');
     const [copied, setCopied] = useState<'childurl' | 'appurl' | null>(null);
+    const [backendConnected, setBackendConnected] = useState(false);
+    const [syncing, setSyncing] = useState(false);
+    const [syncMessage, setSyncMessage] = useState('');
 
     const appUrl = window.location.origin;
     const childUrl = activeChildId ? `${appUrl}?child=${activeChildId}` : '';
+
+    // Check backend connectivity on mount and periodically
+    useEffect(() => {
+        const checkConnection = async () => {
+            const connected = await checkBackendConnectivity();
+            setBackendConnected(connected);
+        };
+
+        checkConnection();
+        const interval = setInterval(checkConnection, 5000);
+        return () => clearInterval(interval);
+    }, []);
 
     // Generate QR codes when they're shown
     useEffect(() => {
@@ -72,6 +88,37 @@ export default function SettingsView() {
         if (activeChild && activeChildId && confirm('Remove PIN protection from this child?')) {
             store.updateChild(activeChildId, { pin: undefined });
         }
+    };
+
+    const handleSync = async () => {
+        if (!backendConnected || !activeChildId) return;
+
+        setSyncing(true);
+        setSyncMessage('Syncing...');
+
+        try {
+            const syncData = {
+                children: store.children,
+                taskTemplates: store.taskTemplates,
+                occurrences: store.occurrences,
+                version: store.version,
+            };
+
+            await syncApi.push(activeChildId, syncData);
+            store.setLastSyncTime(Date.now());
+            setSyncMessage('✅ Synced successfully!');
+            setTimeout(() => setSyncMessage(''), 3000);
+        } catch (error) {
+            setSyncMessage('❌ Sync failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        } finally {
+            setSyncing(false);
+        }
+    };
+
+    const formatLastSync = () => {
+        if (!store.lastSyncTime) return 'Never';
+        const date = new Date(store.lastSyncTime);
+        return date.toLocaleTimeString();
     };
 
     if (!activeChildId || !activeChild) {
@@ -269,6 +316,50 @@ export default function SettingsView() {
                     </div>
                 </div>
             </div>
+
+            {/* Backend Sync Section */}
+            {backendConnected !== null && (
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 className="font-semibold text-gray-800 mb-4">Backend Sync ☁️</h3>
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="font-medium text-sm text-gray-700">
+                                    Status: {backendConnected ? '🌐 Connected' : '📴 Offline'}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Last sync: {formatLastSync()}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button
+                                onClick={handleSync}
+                                disabled={!backendConnected || syncing}
+                                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 transition-colors"
+                            >
+                                {syncing ? 'Syncing...' : 'Sync Now'}
+                            </button>
+                            <label className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={store.backendEnabled}
+                                    onChange={(e) => store.setBackendEnabled(e.target.checked)}
+                                    className="rounded"
+                                />
+                                <span className="text-sm text-gray-700">Auto-sync</span>
+                            </label>
+                        </div>
+
+                        {syncMessage && (
+                            <p className="text-sm text-center p-2 bg-gray-100 rounded">
+                                {syncMessage}
+                            </p>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* About Section */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
