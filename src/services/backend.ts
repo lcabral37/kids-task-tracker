@@ -1,7 +1,14 @@
 import { Child, TaskTemplate, TaskOccurrence, SyncData } from '../store/taskStore';
 
-// Configure the backend URL - can be overridden
-let BACKEND_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000';
+// Configure the backend URL - dynamically detect based on current host
+const getDefaultBackendUrl = () => {
+    const currentHost = window.location.hostname;
+    const port = 3000;
+    const protocol = window.location.protocol;
+    return `${protocol}//${currentHost}:${port}`;
+};
+
+let BACKEND_URL = (import.meta as any).env?.VITE_API_URL || getDefaultBackendUrl();
 
 export const setBackendUrl = (url: string) => {
     BACKEND_URL = url;
