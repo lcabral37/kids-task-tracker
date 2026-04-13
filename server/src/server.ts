@@ -185,14 +185,7 @@ app.post('/api/sync/:childId', async (req: Request, res: Response) => {
         const { childId } = req.params;
         const { data } = req.body;
 
-        // Verify child exists
-        const child = await service.getChild(childId);
-        if (!child) {
-            res.status(404).json({ error: 'Child not found' });
-            return;
-        }
-
-        // Bulk upsert all data
+        // Bulk upsert all data (including child creation/update)
         if (data) {
             await service.bulkUpsertData(data);
         }
