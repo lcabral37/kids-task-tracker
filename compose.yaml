@@ -1,0 +1,83 @@
+# Production stack: Caddy (HTTPS + the built app), plus autoheal, which restarts a container whose
+# health check keeps failing (plain Docker only restarts on exit).
+#   DOMAIN=tasks.example.com docker compose up -d --build
+services:
+  web:
+    build:
+      context: .
+      target: web
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      autoheal: "true"
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+
+  # Restarts containers labelled autoheal=true once Docker reports them unhealthy.
+  autoheal:
+    image: willfarrell/autoheal@sha256:7221058d5f68f4aef6eccd88417c6ae18436ad81b8f9d98a204901033b662740
+    restart: unless-stopped
+    depends_on:
+      - docker-proxy
+    environment:
+      DOCKER_SOCK: tcp://docker-proxy:2375
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: "10"
+    networks:
+      - docker-api
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  # Autoheal never touches the Docker socket itself: this proxy only lets it list containers
+  # and restart them (deploy/docker-proxy.cfg). Full socket access would amount to root on the host.
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    restart: unless-stopped
+    command: ["haproxy", "-f", "/usr/local/etc/haproxy/autoheal.cfg"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./deploy/docker-proxy.cfg:/usr/local/etc/haproxy/autoheal.cfg:ro
+    networks:
+      - docker-api
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  # Internal: no internet access, and the web container isn't on it, so only autoheal can
+  # reach the proxy.
+  docker-api:
+    internal: true
+
+volumes:
+  caddy-data:
+  caddy-config:

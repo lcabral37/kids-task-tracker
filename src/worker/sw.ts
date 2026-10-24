@@ -1,67 +1,70 @@
-// src/worker/sw.ts
+/// <reference lib="webworker" />
+declare let self: ServiceWorkerGlobalScope & {
+	__WB_MANIFEST: Array<{ url: string; revision: string | null }>;
+};
 
-// Service Worker implementation for offline functionality
+export {};
 
-const CACHE_NAME = 'v1';
-const urlsToCache = [
-    '/',
-    '/index.html',
-    '/styles.css',
-    '/script.js'
-];
+// Filled in at build time by vite-plugin-pwa with every built file and its revision.
+const PRECACHE = self.__WB_MANIFEST;
+// The plugin lists the manifest and its icons a second time, and cache.addAll rejects duplicates.
+const URLS = [...new Set(PRECACHE.map((e) => e.url))];
+const CACHE_NAME = `ktt-${hash(PRECACHE.map((e) => `${e.url}@${e.revision}`).join("|"))}`;
 
-// Install event - cache the necessary resources
-self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then((cache) => {
-                console.log('Opened cache');
-                return cache.addAll(urlsToCache);
-            })
-    );
+function hash(text: string): string {
+	let h = 0;
+	for (let i = 0; i < text.length; i++)
+		h = (Math.imul(31, h) + text.charCodeAt(i)) | 0;
+	return (h >>> 0).toString(16);
+}
+
+self.addEventListener("install", (event) => {
+	event.waitUntil(
+		caches
+			.open(CACHE_NAME)
+			.then((cache) => cache.addAll(URLS))
+			.then(() => self.skipWaiting()),
+	);
 });
 
-// Fetch event - return cached resources or fetch from network
-self.addEventListener('fetch', (event) => {
-    event.respondWith(
-        caches.match(event.request)
-            .then((response) => {
-                // Cache hit - return the cached response
-                if (response) {
-                    return response;
-                }
-                // Important: Clone the request
-                const requestClone = event.request.clone();
-                return fetch(requestClone)
-                    .then((fetchResponse) => {
-                        // Check if we received a valid response
-                        if (!fetchResponse || fetchResponse.status !== 200 || fetchResponse.type !== 'basic') {
-                            return fetchResponse;
-                        }
-                        // Clone the response
-                        const responseToCache = fetchResponse.clone();
-                        caches.open(CACHE_NAME)
-                            .then((cache) => {
-                                cache.put(event.request, responseToCache);
-                            });
-                        return fetchResponse;
-                    });
-            })
-    );
+self.addEventListener("activate", (event) => {
+	event.waitUntil(
+		caches
+			.keys()
+			.then((names) =>
+				Promise.all(
+					names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n)),
+				),
+			)
+			.then(() => self.clients.claim()),
+	);
 });
 
-// Activate event - clean up old caches
-self.addEventListener('activate', (event) => {
-    const cacheWhitelist = [CACHE_NAME];
-    event.waitUntil(
-        caches.keys().then((cacheNames) => {
-            return Promise.all(
-                cacheNames.map((cacheName) => {
-                    if (cacheWhitelist.indexOf(cacheName) === -1) {
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
-        })
-    );
+self.addEventListener("fetch", (event) => {
+	const { request } = event;
+	if (
+		request.method !== "GET" ||
+		new URL(request.url).origin !== self.location.origin
+	)
+		return;
+
+	// Pages: network first so a deploy shows up straight away, the cached app shell when offline.
+	if (request.mode === "navigate") {
+		event.respondWith(
+			fetch(request).catch(
+				async () =>
+					(await caches.match("index.html", { cacheName: CACHE_NAME })) ??
+					Response.error(),
+			),
+		);
+		return;
+	}
+
+	// The page loads its scripts with crossorigin, so they send an Origin header the precache requests
+	// didn't; without ignoreVary, "Vary: Origin" or "Vary: Accept-Encoding" turns every lookup into a miss.
+	event.respondWith(
+		caches
+			.match(request, { cacheName: CACHE_NAME, ignoreVary: true })
+			.then((cached) => cached ?? fetch(request)),
+	);
 });

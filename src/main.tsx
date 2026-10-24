@@ -1,6 +1,15 @@
-import React from 'react';
-import ReactDOM from 'react-dom';
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import "./index.css";
+import { registerServiceWorker } from "./services/swRegister";
 
-const App = () => <h1>Hello, World!</h1>;
+ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+	<React.StrictMode>
+		<App />
+	</React.StrictMode>,
+);
 
-ReactDOM.render(<App />, document.getElementById('root'));
+if (import.meta.env.PROD) {
+	registerServiceWorker("/sw.js");
+}

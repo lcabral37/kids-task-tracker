@@ -1,33 +1,17 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="Track your kids' tasks and the pocket money they earn.">
+    <meta name="theme-color" content="#4f7cff">
     <title>Kids Task Tracker</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="/favicon.ico" sizes="48x48">
+    <link rel="icon" href="/icon.svg" sizes="any" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png">
 </head>
 <body>
-    <header>
-        <h1>Kids Task Tracker</h1>
-    </header>
-    <main>
-        <section>
-            <h2>Task List</h2>
-            <ul id="taskList">
-                <!-- Tasks will be populated here -->
-            </ul>
-        </section>
-        <section>
-            <h2>Add New Task</h2>
-            <form id="taskForm">
-                <input type="text" id="taskInput" placeholder="Enter a new task" required>
-                <button type="submit">Add Task</button>
-            </form>
-        </section>
-    </main>
-    <footer>
-        <p>&copy; 2026 Kids Task Tracker</p>
-    </footer>
-    <script src="script.js"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

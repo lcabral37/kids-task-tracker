@@ -21,7 +21,7 @@ interface DailyEarnings {
     amount: number;
 }
 
-interface SyncQueue {
+export interface SyncQueue {
     id?: number; // optional primary key 
     entity: string;
     action: string;
