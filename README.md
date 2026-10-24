@@ -1,4 +1,3 @@
-# Kids Task Tracker
 
 <img src="public/icon.svg" alt="" width="96" align="right">
 
@@ -102,8 +101,8 @@ The IndexedDB database `KidsTaskTrackerDB` (`src/db/database.ts`) has four table
 - [ ] `App` doesn't render `ChildList` or `TaskList` yet.
 - [ ] Components keep their own local state instead of using the Zustand store, and the store
       isn't saved to Dexie.
-- [ ] `SyncService` keeps its queue in memory, not in the `syncQueue` table, and there's no
-      server to sync with yet.
+- [ ] `SyncService` stores queued changes in the `syncQueue` table, but nothing adds to it yet
+      and there's no server to sync with, so data isn't shared between devices.
 - [ ] Earnings rules (how much a task is worth) aren't defined yet.
 
 ## License
