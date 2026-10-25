@@ -1,12 +1,17 @@
-# Serves the built app (dist/).
-#   DOMAIN       public host name; Caddy gets and renews its HTTPS certificate (default: localhost).
-#                ":80" serves plain HTTP, for a platform or proxy that handles HTTPS itself.
+# Serves the built app over plain HTTP. HTTPS, the public host name and caching at the edge are
+# the Cloudflare tunnel's job, so there are no certificates, redirects or admin API here.
+#   PORT         port to listen on (default: 8080)
 #   STATIC_ROOT  where the built files are (default: /srv, as in the Docker image)
-{$DOMAIN:localhost} {
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:{$PORT:8080} {
 	encode zstd gzip
 
 	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 		X-Content-Type-Options nosniff
 		Referrer-Policy no-referrer

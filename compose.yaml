@@ -1,16 +1,17 @@
-# Production stack: Caddy (HTTPS + the built app), plus autoheal, which restarts a container whose
-# health check keeps failing (plain Docker only restarts on exit).
-#   DOMAIN=tasks.example.com docker compose up -d --build
+# Serves the app over plain HTTP on a host port; HTTPS and the public host name are the Cloudflare
+# tunnel's job (see DEPLOY.md).
+#   PORT=8080 docker compose up -d --build
+#   PORT          host port (default: 8080)
+#   BIND_ADDRESS  host address to listen on (default: 127.0.0.1, this machine only; 0.0.0.0 for
+#                 every interface, e.g. when the tunnel runs in a container on the bridge network)
 services:
   web:
     build:
       context: .
       target: web
     restart: unless-stopped
-    environment:
-      DOMAIN: ${DOMAIN:-localhost}
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -18,19 +19,12 @@ services:
     labels:
       autoheal: "true"
     ports:
-      - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
-      - "${HTTPS_PORT:-443}:443/udp"
-    volumes:
-      - caddy-data:/data
-      - caddy-config:/config
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080"
     read_only: true
     tmpfs:
       - /tmp
     cap_drop:
       - ALL
-    cap_add:
-      - NET_BIND_SERVICE
     security_opt:
       - no-new-privileges:true
 
@@ -77,7 +71,3 @@ networks:
   # reach the proxy.
   docker-api:
     internal: true
-
-volumes:
-  caddy-data:
-  caddy-config:
