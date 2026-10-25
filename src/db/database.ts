@@ -1,49 +1,78 @@
-import Dexie, { Table } from 'dexie';
+import Dexie, { type Table } from "dexie";
 
-// Define TypeScript interfaces
-interface Child {
-    id?: number; // optional primary key 
-    name: string;
-    age: number;
+export interface Child {
+	id: string;
+	name: string;
+	avatar: string;
+	color: string;
+	createdAt: number;
 }
 
-interface Task {
-    id?: number; // optional primary key 
-    title: string;
-    description: string;
-    isCompleted: boolean;
-    childId: number; // Foreign key to Child
+export type Repeat = "daily" | "once";
+
+export interface Task {
+	id: string;
+	childId: string;
+	title: string;
+	// Money is stored in minor units (øre/cents) so sums stay exact.
+	reward: number;
+	repeat: Repeat;
+	createdAt: number;
 }
 
-interface DailyEarnings {
-    id?: number; // optional primary key 
-    date: string;
-    amount: number;
+export interface Completion {
+	id: string;
+	taskId: string;
+	childId: string;
+	date: string;
+	// Copied from the task when it's ticked, so changing or deleting the task later doesn't
+	// rewrite what was already earned.
+	reward: number;
+}
+
+export interface Payout {
+	id: string;
+	childId: string;
+	amount: number;
+	date: string;
 }
 
 export interface SyncQueue {
-    id?: number; // optional primary key 
-    entity: string;
-    action: string;
-    payload: object;
+	id?: number;
+	entity: string;
+	action: string;
+	payload: object;
 }
 
-// Setup Dexie database
 class KidsTaskTrackerDB extends Dexie {
-    children!: Table<Child>;
-    tasks!: Table<Task>;
-    dailyEarnings!: Table<DailyEarnings>;
-    syncQueue!: Table<SyncQueue>;
+	children!: Table<Child, string>;
+	tasks!: Table<Task, string>;
+	completions!: Table<Completion, string>;
+	payouts!: Table<Payout, string>;
+	syncQueue!: Table<SyncQueue, number>;
 
-    constructor() {
-        super('KidsTaskTrackerDB');
-        this.version(1).stores({
-            children: '++id',
-            tasks: '++id,childId',
-            dailyEarnings: '++id',
-            syncQueue: '++id'
-        });
-    }
+	constructor() {
+		super("KidsTaskTrackerDB");
+		this.version(1).stores({
+			children: "++id",
+			tasks: "++id,childId",
+			dailyEarnings: "++id",
+			syncQueue: "++id",
+		});
+		// IndexedDB can't change a table's primary key, so version 2 drops the auto-increment
+		// tables and version 3 recreates them with string ids (safe to merge across devices later).
+		this.version(2).stores({
+			children: null,
+			tasks: null,
+			dailyEarnings: null,
+		});
+		this.version(3).stores({
+			children: "id",
+			tasks: "id, childId",
+			completions: "id, childId, taskId, [taskId+date]",
+			payouts: "id, childId",
+		});
+	}
 }
 
 const db = new KidsTaskTrackerDB();
